@@ -1,4 +1,5 @@
 import {
+  addDays,
   addMonths,
   addWeeks,
   eachMonthOfInterval,
@@ -24,7 +25,7 @@ export interface ScheduleRow {
 
 export function generateSchedule(loan: Loan): ScheduleRow[] {
   const start = parseISO(loan.startDate);
-  const n = loan.tenureMonths; // represents tenure count (weeks or months)
+  const n = loan.tenureMonths; // represents tenure count (days, weeks, or months)
   const rows: ScheduleRow[] = [];
   if (n <= 0) return rows;
 
@@ -49,7 +50,7 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
 
   // 2. Weekly Interest-Only
   if (loan.interestType === 'weekly_interest_only') {
-    const weeklyInterest = (loan.principal * (loan.interestRate / 100)) / 52;
+    const weeklyInterest = (loan.principal * loan.interestRate) / 100;
     for (let i = 1; i <= n; i++) {
       const isLast = i === n;
       const principalPart = isLast ? loan.principal : 0;
@@ -117,7 +118,7 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
 
   // 5. Monthly Interest-Only
   if (loan.interestType === 'interest_only') {
-    const monthlyInterest = (loan.principal * loan.interestRate) / 100 / 12;
+    const monthlyInterest = (loan.principal * loan.interestRate) / 100;
     for (let i = 1; i <= n; i++) {
       const isLast = i === n;
       const principalPart = isLast ? loan.principal : 0;
@@ -135,11 +136,20 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
   }
 
   // 6. Lumpsum at Maturity
-  const totalInterest = ((loan.principal * loan.interestRate) / 100) * (n / 12);
+  let maturityDate = addMonths(start, n);
+  let totalInterest = (loan.principal * (loan.interestRate / 100)) * n;
+
+  if (loan.lumpsumUnit === 'days') {
+    maturityDate = addDays(start, n);
+    totalInterest = (loan.principal * (loan.interestRate / 100)) * (n / 30);
+  } else if (loan.lumpsumUnit === 'weeks') {
+    maturityDate = addWeeks(start, n);
+  }
+
   const total = loan.principal + totalInterest;
   rows.push({
     installment: 1,
-    dueDate: addMonths(start, n).toISOString(),
+    dueDate: maturityDate.toISOString(),
     amount: round(total),
     principal: round(loan.principal),
     interest: round(totalInterest),
