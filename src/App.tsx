@@ -43,7 +43,7 @@ function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 mb-3">
             <ShieldCheck size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">LendBook Portal</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Bhadrik Enterprises Portal</h1>
           <p className="text-slate-400 text-sm mt-1">Authenticate to access your dashboard</p>
         </div>
 
@@ -147,7 +147,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <div className="animate-pulse text-slate-400 font-medium">Loading LendBook...</div>
+        <div className="animate-pulse text-slate-400 font-medium">Loading Bhadrik Enterprises...</div>
       </div>
     );
   }
