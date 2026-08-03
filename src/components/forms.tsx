@@ -105,8 +105,12 @@ export function LoanForm({
     if (interestType === 'weekly_interest_only') return 'Weekly Interest Rate (%)';
     if (interestType === 'interest_only') return 'Monthly Interest Rate (%)';
     if (isWeekly) return 'Weekly Interest Rate (%)';
+    if (isLumpsum) {
+      if (lumpsumUnit === 'weeks') return 'Weekly Interest Rate (%)';
+      return 'Monthly Interest Rate (%)';
+    }
     return 'Annual Interest Rate (%)';
-  }, [interestType, isWeekly]);
+  }, [interestType, isWeekly, isLumpsum, lumpsumUnit]);
 
   // Dynamic Tenure Label
   const tenureLabel = useMemo(() => {
@@ -127,7 +131,20 @@ export function LoanForm({
     let totalInterest = 0;
     let totalPayable = 0;
 
-    if (isInterestOnly) {
+    if (isLumpsum) {
+      if (lumpsumUnit === 'days') {
+        // Daily prorated rate based on monthly interest (30 days/month)
+        totalInterest = p * (r / 100) * (n / 30);
+      } else if (lumpsumUnit === 'weeks') {
+        // Weekly interest rate * number of weeks
+        totalInterest = p * (r / 100) * n;
+      } else {
+        // Monthly interest rate * number of months
+        totalInterest = p * (r / 100) * n;
+      }
+      totalPayable = p + totalInterest;
+      installmentAmount = totalPayable;
+    } else if (isInterestOnly) {
       // Direct periodic rate calculation (monthly or weekly)
       installmentAmount = (p * r) / 100;
       totalInterest = installmentAmount * n;
@@ -257,23 +274,21 @@ export function LoanForm({
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
 
-        <div className="grid grid-cols-1 gap-2">
-          <Field label={tenureLabel} required>
-            <div className="relative flex gap-2">
-              <div className="relative flex-1">
-                <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input type="number" min="1" step="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="10" className="pl-8" />
-              </div>
-              {isLumpsum && (
-                <Select value={lumpsumUnit} onChange={(e) => setLumpsumUnit(e.target.value as 'days' | 'weeks' | 'months')} className="w-28">
-                  <option value="days">Days</option>
-                  <option value="weeks">Weeks</option>
-                  <option value="months">Months</option>
-                </Select>
-              )}
+        <Field label={tenureLabel} required>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input type="number" min="1" step="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="10" className="pl-8" />
             </div>
-          </Field>
-        </div>
+            {isLumpsum && (
+              <Select value={lumpsumUnit} onChange={(e) => setLumpsumUnit(e.target.value as 'days' | 'weeks' | 'months')} className="w-32">
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+                <option value="months">Months</option>
+              </Select>
+            )}
+          </div>
+        </Field>
       </div>
 
       <Field label="Interest Type" required>
