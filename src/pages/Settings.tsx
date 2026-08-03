@@ -1,116 +1,131 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Save, Building2, Coins, ShieldCheck, UploadCloud, Info } from 'lucide-react';
 import { useStore } from '../lib/store';
-import { useToast } from '../lib/toast';
-import { formatCurrency } from '../lib/format';
-import { Button, Card, Field, Input, Select } from '../components/ui';
-import type { Currency } from '../lib/types';
-
-const CURRENCIES: { value: Currency; label: string }[] = [
-  { value: 'INR', label: '₹ Indian Rupee (INR)' },
-  { value: 'USD', label: '$ US Dollar (USD)' },
-  { value: 'EUR', label: '€ Euro (EUR)' },
-  { value: 'GBP', label: '£ British Pound (GBP)' },
-];
+import { Save, Trash2, Check } from 'lucide-react';
 
 export function Settings() {
-  const { data, updateSettings } = useStore();
-  const { notify } = useToast();
-  const navigate = useNavigate();
+  const { data, setData } = useStore();
   const [lenderName, setLenderName] = useState(data.settings.lenderName);
-  const [currency, setCurrency] = useState<Currency>(data.settings.currency);
+  const [currency, setCurrency] = useState(data.settings.currency);
+  const [saved, setSaved] = useState(false);
+  const [currencySaved, setCurrencySaved] = useState(false);
 
-  const save = () => {
-    updateSettings({ lenderName: lenderName.trim() || 'My Lending Book', currency });
-    notify('Settings saved');
+  const handleSave = () => {
+    setData((prev: any) => ({
+      ...prev,
+      settings: { ...prev.settings, lenderName, currency },
+    }));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleSaveCurrency = () => {
+    setData((prev: any) => ({
+      ...prev,
+      settings: { ...prev.settings, currency },
+    }));
+    setCurrencySaved(true);
+    setTimeout(() => setCurrencySaved(false), 2000);
+  };
+
+  const handleResetData = () => {
+    if (
+      window.confirm(
+        'Are you sure you want to delete all present data? This will clear all clients, loans, and repayments.'
+      )
+    ) {
+      localStorage.clear();
+      window.location.reload();
+    }
   };
 
   return (
-    <div className="space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card className="p-5">
-          <div className="mb-4 flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-              <Building2 size={18} />
-            </div>
-            <div>
-              <h3 className="font-display text-base font-bold text-slate-900">Profile</h3>
-              <p className="text-xs text-slate-500">Your lending book identity</p>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <Field label="Lender / Book Name" hint="Shown in the sidebar and exports">
-              <Input value={lenderName} onChange={(e) => setLenderName(e.target.value)} placeholder="My Lending Book" />
-            </Field>
-            <Button onClick={save}>
-              <Save size={16} /> Save Changes
-            </Button>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="mb-4 flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-              <Coins size={18} />
-            </div>
-            <div>
-              <h3 className="font-display text-base font-bold text-slate-900">Currency</h3>
-              <p className="text-xs text-slate-500">Used across all amounts in the app</p>
-            </div>
-          </div>
-          <Field label="Display Currency">
-            <Select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
-              {CURRENCIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Preview</p>
-            <p className="font-display text-2xl font-bold text-slate-900 tabular">
-              {formatCurrency(1234567, currency)}
-            </p>
-            <p className="mt-0.5 text-sm text-slate-400">
-              Compact: {formatCurrency(1234567, currency, { compact: true })} ·{' '}
-              {formatCurrency(54000, currency, { compact: true })}
-            </p>
-          </div>
-          <Button className="mt-4" variant="outline" onClick={save}>
-            <Save size={16} /> Apply Currency
-          </Button>
-        </Card>
+    <div className="space-y-6 max-w-5xl mx-auto p-6">
+      {/* Settings Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+        <p className="text-sm text-slate-500">Preferences and data management</p>
       </div>
 
-      <Card className="p-5">
-        <div className="mb-4 flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-            <ShieldCheck size={18} />
-          </div>
-          <div>
-            <h3 className="font-display text-base font-bold text-slate-900">Data & Privacy</h3>
-            <p className="text-xs text-slate-500">Your data is stored only in this browser (localStorage)</p>
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Profile Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Profile</h2>
+          <p className="text-xs text-slate-500 mb-4">Your lending book identity</p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Lender / Book Name
+              </label>
+              <input
+                type="text"
+                value={lenderName}
+                onChange={(e) => setLenderName(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+            >
+              {saved ? <Check size={16} /> : <Save size={16} />}
+              {saved ? 'Saved!' : 'Save Changes'}
+            </button>
           </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2.5 text-sm text-slate-500">
-            <Info size={16} className="mt-0.5 shrink-0 text-slate-400" />
-            <p>
-              Nothing is sent to any server. Back up your data regularly via JSON export, and use the Upload page to
-              bulk import or reset.
+
+        {/* Currency Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-900">Currency</h2>
+          <p className="text-xs text-slate-500 mb-4">Used across all amounts in the app</p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Display Currency
+              </label>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="INR">₹ Indian Rupee (INR)</option>
+                <option value="USD">$ US Dollar (USD)</option>
+                <option value="EUR">€ Euro (EUR)</option>
+                <option value="GBP">£ British Pound (GBP)</option>
+              </select>
+            </div>
+            <button
+              onClick={handleSaveCurrency}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              {currencySaved ? <Check size={16} className="text-emerald-600" /> : null}
+              {currencySaved ? 'Applied!' : 'Apply Currency'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Data & Privacy Card with Clear Data Button */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900">Data & Privacy</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Your data is stored only in this browser (localStorage). Nothing is sent to any server.
+        </p>
+        <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Clear All App Data</p>
+            <p className="text-xs text-slate-500">
+              Permanently remove all clients, loans, and repayments to start fresh.
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate('/upload')} className="shrink-0">
-            <UploadCloud size={16} /> Go to Upload Data
-          </Button>
+          <button
+            onClick={handleResetData}
+            className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
+          >
+            <Trash2 size={16} />
+            Reset All Data
+          </button>
         </div>
-      </Card>
-
-      <p className="text-center text-xs text-slate-400">
-        LendBook · P2P Lending Dashboard — built for tracking clients, loans & repayments
-      </p>
+      </div>
     </div>
   );
 }
