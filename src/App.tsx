@@ -13,6 +13,7 @@ import { Upload } from './pages/Upload';
 import { Settings } from './pages/Settings';
 import { supabase } from './lib/supabase';
 import { Lock, Mail, ShieldCheck } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
 
 // --- Login Page Component ---
 function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
@@ -123,20 +124,20 @@ function Layout() {
   );
 }
 
-// --- Root App Component with Supabase Authentication Guard ---
+// --- Root App Component ---
 export default function App() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setSession(session);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setSession(session);
       setLoading(false);
     });
@@ -152,12 +153,10 @@ export default function App() {
     );
   }
 
-  // If NOT logged in, render Login page
   if (!session) {
     return <Login onLoginSuccess={() => {}} />;
   }
 
-  // If logged in, render the full application with all providers & routes
   return (
     <StoreProvider>
       <ToastProvider>
