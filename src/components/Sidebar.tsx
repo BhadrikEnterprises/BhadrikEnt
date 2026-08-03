@@ -32,7 +32,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           <TrendingUp size={20} className="text-white" />
         </div>
         <div>
-          <p className="font-display text-lg font-extrabold leading-none text-white">LendBook</p>
+          <p className="font-display text-base font-extrabold leading-none text-white">Bhadrik Enterprises</p>
           <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             P2P Lending
           </p>
@@ -74,11 +74,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <div className="rounded-xl bg-slate-800/60 p-3.5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-400">
-              {(data.settings.lenderName || 'L')[0].toUpperCase()}
+              {(data.settings.lenderName || 'B')[0].toUpperCase()}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
-                {data.settings.lenderName || 'Lender'}
+                {data.settings.lenderName || 'Bhadrik Enterprises'}
               </p>
               <p className="text-xs text-slate-500">{data.settings.currency} · {data.clients.length} clients</p>
             </div>
