@@ -14,7 +14,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
 
 export function Topbar({ onMenuClick, pathname }: { onMenuClick: () => void; pathname: string }) {
   const { recordRepayment } = useQuickActions();
-  const meta = TITLES[pathname] ?? { title: 'LendBook', subtitle: '' };
+  const meta = TITLES[pathname] ?? { title: 'Bhadrik Enterprises', subtitle: '' };
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-slate-50/80 backdrop-blur-md">
