@@ -1,5 +1,6 @@
 import {
   addMonths,
+  addWeeks,
   eachMonthOfInterval,
   format,
   isSameMonth,
@@ -23,12 +24,76 @@ export interface ScheduleRow {
 
 export function generateSchedule(loan: Loan): ScheduleRow[] {
   const start = parseISO(loan.startDate);
-  const r = loan.interestRate / 100 / 12;
-  const n = loan.tenureMonths;
+  const n = loan.tenureMonths; // represents tenure count (weeks or months)
   const rows: ScheduleRow[] = [];
   if (n <= 0) return rows;
 
+  // 1. Weekly Upfront Deduction (e.g. 1,00,000 principal, 80k issued, 1,00,000 repaid over n weeks)
+  if (loan.interestType === 'weekly_upfront_deduction') {
+    const weeklyEmi = loan.principal / n;
+    let balance = loan.principal;
+
+    for (let i = 1; i <= n; i++) {
+      balance = Math.max(0, balance - weeklyEmi);
+      rows.push({
+        installment: i,
+        dueDate: addWeeks(start, i).toISOString(),
+        amount: round(weeklyEmi),
+        principal: round(weeklyEmi),
+        interest: 0,
+        balance: round(balance),
+      });
+    }
+    return rows;
+  }
+
+  // 2. Weekly Interest-Only
+  if (loan.interestType === 'weekly_interest_only') {
+    const weeklyInterest = (loan.principal * (loan.interestRate / 100)) / 52;
+    for (let i = 1; i <= n; i++) {
+      const isLast = i === n;
+      const principalPart = isLast ? loan.principal : 0;
+      const amount = isLast ? loan.principal + weeklyInterest : weeklyInterest;
+      rows.push({
+        installment: i,
+        dueDate: addWeeks(start, i).toISOString(),
+        amount: round(amount),
+        principal: round(principalPart),
+        interest: round(weeklyInterest),
+        balance: round(isLast ? 0 : loan.principal),
+      });
+    }
+    return rows;
+  }
+
+  // 3. Weekly Reducing Balance EMI
+  if (loan.interestType === 'weekly_reducing') {
+    const r = loan.interestRate / 100 / 52; // weekly rate
+    let emi: number;
+    if (r === 0) emi = loan.principal / n;
+    else emi = (loan.principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+
+    let balance = loan.principal;
+    for (let i = 1; i <= n; i++) {
+      const interest = balance * r;
+      let principal = emi - interest;
+      if (i === n) principal = balance;
+      balance = Math.max(0, balance - principal);
+      rows.push({
+        installment: i,
+        dueDate: addWeeks(start, i).toISOString(),
+        amount: round(emi),
+        principal: round(principal),
+        interest: round(interest),
+        balance: round(balance),
+      });
+    }
+    return rows;
+  }
+
+  // 4. Monthly EMI (Reducing Balance)
   if (loan.interestType === 'emi') {
+    const r = loan.interestRate / 100 / 12;
     let emi: number;
     if (r === 0) emi = loan.principal / n;
     else emi = (loan.principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
@@ -47,7 +112,11 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
         balance: round(balance),
       });
     }
-  } else if (loan.interestType === 'interest_only') {
+    return rows;
+  }
+
+  // 5. Monthly Interest-Only
+  if (loan.interestType === 'interest_only') {
     const monthlyInterest = (loan.principal * loan.interestRate) / 100 / 12;
     for (let i = 1; i <= n; i++) {
       const isLast = i === n;
@@ -62,18 +131,21 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
         balance: round(isLast ? 0 : loan.principal),
       });
     }
-  } else {
-    const totalInterest = ((loan.principal * loan.interestRate) / 100) * (n / 12);
-    const total = loan.principal + totalInterest;
-    rows.push({
-      installment: 1,
-      dueDate: addMonths(start, n).toISOString(),
-      amount: round(total),
-      principal: round(loan.principal),
-      interest: round(totalInterest),
-      balance: 0,
-    });
+    return rows;
   }
+
+  // 6. Lumpsum at Maturity
+  const totalInterest = ((loan.principal * loan.interestRate) / 100) * (n / 12);
+  const total = loan.principal + totalInterest;
+  rows.push({
+    installment: 1,
+    dueDate: addMonths(start, n).toISOString(),
+    amount: round(total),
+    principal: round(loan.principal),
+    interest: round(totalInterest),
+    balance: 0,
+  });
+
   return rows;
 }
 
@@ -185,7 +257,9 @@ export function computePortfolio(data: AppData): PortfolioStats {
 
   for (const loan of data.loans) {
     const st = computeLoanStats(loan, data.repayments, today);
-    totalLent += loan.principal;
+    // Use net disbursed amount if applicable, otherwise full principal
+    const actualDisbursed = loan.disbursedAmount ?? loan.principal;
+    totalLent += actualDisbursed;
     totalReceivable += st.totalPayable;
     totalInterestExpected += st.totalInterest;
     totalReceived += st.received;
@@ -232,7 +306,7 @@ export function getMonthlySeries(data: AppData, months = 12): MonthlyPoint[] {
   return arr.map((m) => {
     const disbursed = data.loans
       .filter((l) => isSameMonth(parseISO(l.startDate), m))
-      .reduce((s, l) => s + l.principal, 0);
+      .reduce((s, l) => s + (l.disbursedAmount ?? l.principal), 0);
     const collected = data.repayments
       .filter((r) => isSameMonth(parseISO(r.date), m))
       .reduce((s, r) => s + r.amount, 0);
@@ -264,7 +338,7 @@ export function computeClientStats(
   let overdue = 0;
   for (const l of loans) {
     const st = computeLoanStats(l, data.repayments, today);
-    totalLent += l.principal;
+    totalLent += l.disbursedAmount ?? l.principal;
     totalReceived += st.received;
     outstanding += st.outstanding;
     overdue += st.arrears;
