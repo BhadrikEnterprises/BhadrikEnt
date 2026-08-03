@@ -8,10 +8,12 @@ import {
   Settings as SettingsIcon,
   X,
   TrendingUp,
+  LogOut,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './ui';
 import { useStore } from '../lib/store';
+import { supabase } from '../lib/supabase';
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,6 +26,10 @@ const NAV = [
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data } = useStore();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   const content = (
     <div className="flex h-full flex-col bg-slate-900 text-slate-300">
@@ -70,7 +76,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         ))}
       </nav>
 
-      <div className="border-t border-slate-800 p-4">
+      <div className="border-t border-slate-800 p-4 space-y-3">
         <div className="rounded-xl bg-slate-800/60 p-3.5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-400">
@@ -84,6 +90,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             </div>
           </div>
         </div>
+
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-400 py-2.5 text-xs font-semibold transition-colors border border-slate-700/50 cursor-pointer"
+        >
+          <LogOut size={16} />
+          Sign Out
+        </button>
       </div>
     </div>
   );
