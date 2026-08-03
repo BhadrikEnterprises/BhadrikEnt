@@ -13,7 +13,6 @@ import { Upload } from './pages/Upload';
 import { Settings } from './pages/Settings';
 import { supabase } from './lib/supabase';
 import { Lock, Mail, ShieldCheck } from 'lucide-react';
-import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 // --- Login Component ---
 function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
@@ -126,18 +125,18 @@ function Layout() {
 
 // --- Root App Component ---
 export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then((res: { data: { session: Session | null } }) => {
-      setSession(res.data.session);
+    supabase.auth.getSession().then((res: any) => {
+      setSession(res?.data?.session || null);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, currentSession: Session | null) => {
+    } = supabase.auth.onAuthStateChange((_event: any, currentSession: any) => {
       setSession(currentSession);
       setLoading(false);
     });
