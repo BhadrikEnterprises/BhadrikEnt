@@ -24,6 +24,9 @@ const TYPE_LABEL: Record<string, string> = {
   emi: 'EMI · Reducing',
   interest_only: 'Interest-only',
   lumpsum: 'Lumpsum',
+  weekly_reducing: 'Weekly EMI · Reducing',
+  weekly_interest_only: 'Weekly Interest-only',
+  weekly_upfront_deduction: 'Weekly Finance (Upfront Deduction)',
 };
 
 export function LoanDetailModal({
@@ -51,6 +54,8 @@ export function LoanDetailModal({
     .filter((r) => r.loanId === loan.id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const today = new Date();
+
+  const isWeekly = loan.interestType.startsWith('weekly');
 
   return (
     <>
@@ -82,15 +87,19 @@ export function LoanDetailModal({
         {/* Summary */}
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           <StatusPill status={stats.status} />
-          <Badge tone="sky">{TYPE_LABEL[loan.interestType]}</Badge>
-          <Badge tone="slate">{loan.tenureMonths} months</Badge>
+          <Badge tone="sky">{TYPE_LABEL[loan.interestType] ?? 'Loan'}</Badge>
+          <Badge tone="slate">{loan.tenureMonths} {isWeekly ? 'weeks' : 'months'}</Badge>
           {stats.isOverdue && <Badge tone="rose">{formatCurrency(stats.arrears, data.settings.currency)} overdue</Badge>}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryItem icon={<IndianRupee size={14} />} label="Principal" value={formatCurrency(loan.principal, data.settings.currency, { compact: true })} />
-          <SummaryItem icon={<Percent size={14} />} label="Rate" value={`${loan.interestRate}% p.a.`} />
-          <SummaryItem icon={<CalendarClock size={14} />} label="Maturity" value={formatDate(stats.maturityDate, 'MMM yyyy')} />
+          <SummaryItem 
+            icon={<Percent size={14} />} 
+            label="Rate" 
+            value={loan.interestType === 'weekly_upfront_deduction' ? 'Upfront Deducted' : `${loan.interestRate}% p.a.`} 
+          />
+          <SummaryItem icon={<CalendarClock size={14} />} label="Maturity" value={formatDate(stats.maturityDate, 'dd MMM yyyy')} />
           <SummaryItem icon={<CheckCircle2 size={14} />} label="Collected" value={formatCurrency(stats.received, data.settings.currency, { compact: true })} />
         </div>
 
