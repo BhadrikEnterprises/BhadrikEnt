@@ -133,7 +133,7 @@ export function LoanForm({
 
     if (isLumpsum) {
       if (lumpsumUnit === 'days') {
-        // Daily prorated rate based on monthly interest (30 days/month)
+        // Monthly interest prorated per day (using 30-day baseline)
         totalInterest = p * (r / 100) * (n / 30);
       } else if (lumpsumUnit === 'weeks') {
         // Weekly interest rate * number of weeks
@@ -275,17 +275,19 @@ export function LoanForm({
         </Field>
 
         <Field label={tenureLabel} required>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
+          <div className="grid grid-cols-12 gap-2">
+            <div className={isLumpsum ? 'col-span-6 relative' : 'col-span-12 relative'}>
               <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input type="number" min="1" step="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="10" className="pl-8" />
+              <Input type="number" min="1" step="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="10" className="pl-8 w-full" />
             </div>
             {isLumpsum && (
-              <Select value={lumpsumUnit} onChange={(e) => setLumpsumUnit(e.target.value as 'days' | 'weeks' | 'months')} className="w-32">
-                <option value="days">Days</option>
-                <option value="weeks">Weeks</option>
-                <option value="months">Months</option>
-              </Select>
+              <div className="col-span-6">
+                <Select value={lumpsumUnit} onChange={(e) => setLumpsumUnit(e.target.value as 'days' | 'weeks' | 'months')} className="w-full">
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                  <option value="months">Months</option>
+                </Select>
+              </div>
             )}
           </div>
         </Field>
