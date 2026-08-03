@@ -13,9 +13,9 @@ import { Upload } from './pages/Upload';
 import { Settings } from './pages/Settings';
 import { supabase } from './lib/supabase';
 import { Lock, Mail, ShieldCheck } from 'lucide-react';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 
-// --- Login Page Component ---
+// --- Login Component ---
 function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -102,7 +102,7 @@ function Login({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   );
 }
 
-// --- Original Layout Component ---
+// --- Layout Component ---
 function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -130,15 +130,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-      setSession(session);
+    supabase.auth.getSession().then((res: { data: { session: Session | null } }) => {
+      setSession(res.data.session);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, currentSession: Session | null) => {
+      setSession(currentSession);
       setLoading(false);
     });
 
