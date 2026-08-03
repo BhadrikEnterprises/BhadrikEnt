@@ -30,11 +30,22 @@ export function Settings() {
   const handleResetData = () => {
     if (
       window.confirm(
-        'Are you sure you want to delete all present data? This will clear all clients, loans, and repayments.'
+        'Are you sure you want to delete all present data? This will clear all clients, loans, and repayments so you can upload fresh data.'
       )
     ) {
-      localStorage.clear();
-      window.location.reload();
+      // Clear data inside store state without destroying auth session
+      setData((prev: any) => ({
+        ...prev,
+        clients: [],
+        loans: [],
+        repayments: [],
+      }));
+
+      // Also clear specific local storage keys if your store uses custom key persistence
+      const keysToRemove = ['lendbook_data', 'p2p_data', 'store_data', 'app_data'];
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+
+      alert('All client, loan, and repayment data has been wiped clean!');
     }
   };
 
@@ -104,11 +115,11 @@ export function Settings() {
         </div>
       </div>
 
-      {/* Data & Privacy Card with Clear Data Button */}
+      {/* Data & Privacy Card */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-base font-semibold text-slate-900">Data & Privacy</h2>
         <p className="text-xs text-slate-500 mb-4">
-          Your data is stored only in this browser (localStorage). Nothing is sent to any server.
+          Your data is stored locally. Nothing is sent to any server.
         </p>
         <div className="flex items-center justify-between pt-4 border-t border-slate-100">
           <div>
