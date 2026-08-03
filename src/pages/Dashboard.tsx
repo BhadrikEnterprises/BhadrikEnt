@@ -86,7 +86,9 @@ export function Dashboard() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
             <Landmark size={30} />
           </div>
-          <h2 className="font-display text-xl font-bold text-slate-900">Welcome to LendBook</h2>
+          <h2 className="font-display text-xl font-bold text-slate-900">
+            Welcome to {data.settings.lenderName || 'LendBook'}
+          </h2>
           <p className="mt-2 max-w-md text-sm text-slate-500">
             Start by adding a client and your first loan. Once you have active loans, this dashboard will show your portfolio overview, cash flow and repayments.
           </p>
