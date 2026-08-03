@@ -87,67 +87,99 @@ export function LoanForm({
   const [clientId, setClientId] = useState(initial?.clientId ?? data.clients[0]?.id ?? '');
   const [principal, setPrincipal] = useState(initial ? String(initial.principal) : '');
   const [interestRate, setInterestRate] = useState(initial ? String(initial.interestRate) : '');
+  const [upfrontDeduction, setUpfrontDeduction] = useState(initial?.upfrontDeduction ? String(initial.upfrontDeduction) : '');
   const [startDate, setStartDate] = useState(initial ? toISODate(initial.startDate) : todayISODate());
-  const [tenureMonths, setTenure] = useState(initial ? String(initial.tenureMonths) : '12');
+  const [tenure, setTenure] = useState(initial ? String(initial.tenureMonths) : '10');
+  const [lumpsumUnit, setLumpsumUnit] = useState<'days' | 'weeks' | 'months'>('months');
   const [interestType, setType] = useState<InterestType>(initial?.interestType ?? 'emi');
   const [purpose, setPurpose] = useState(initial?.purpose ?? '');
   const [err, setErr] = useState<string>();
 
   const isWeekly = interestType.startsWith('weekly');
+  const isLumpsum = interestType === 'lumpsum';
+  const isUpfront = interestType === 'weekly_upfront_deduction';
+
+  // Dynamic Interest Rate Label
+  const interestRateLabel = useMemo(() => {
+    if (isWeekly) return 'Weekly Interest Rate (%)';
+    if (interestType === 'interest_only') return 'Monthly Interest Rate (%)';
+    return 'Annual Interest Rate (%)';
+  }, [interestType, isWeekly]);
+
+  // Dynamic Tenure Label
+  const tenureLabel = useMemo(() => {
+    if (isLumpsum) return `Tenure (${lumpsumUnit})`;
+    if (isWeekly) return 'Tenure (weeks)';
+    return 'Tenure (months)';
+  }, [isLumpsum, lumpsumUnit, isWeekly]);
 
   const preview = useMemo(() => {
     const p = Number(principal) || 0;
     const r = Number(interestRate) || 0;
-    const n = Number(tenureMonths) || 0;
+    const n = Number(tenure) || 0;
+    const deduction = Number(upfrontDeduction) || 0;
+
     if (p <= 0 || n <= 0) return null;
+
     const loan = {
       id: 'preview',
       clientId,
       principal: p,
       interestRate: r,
+      upfrontDeduction: deduction,
       startDate: new Date(startDate).toISOString(),
       tenureMonths: n,
+      lumpsumUnit: isLumpsum ? lumpsumUnit : undefined,
       interestType,
       purpose,
       createdAt: new Date().toISOString(),
     } as Loan;
+
     const sched = generateSchedule(loan);
     const total = sched.reduce((s, x) => s + x.amount, 0);
-    const interest = sched.reduce((s, x) => s + x.interest, 0);
+    const interest = isUpfront ? deduction : sched.reduce((s, x) => s + x.interest, 0);
+
     return {
       installmentAmount: sched[0]?.amount ?? 0,
-      total,
+      total: isUpfront ? p : total,
       interest,
-      isLumpsum: interestType === 'lumpsum',
+      isLumpsum,
       isInterestOnly: interestType === 'interest_only' || interestType === 'weekly_interest_only',
       isWeekly,
     };
-  }, [principal, interestRate, tenureMonths, startDate, interestType, clientId, purpose, isWeekly]);
+  }, [principal, interestRate, upfrontDeduction, tenure, lumpsumUnit, startDate, interestType, clientId, purpose, isLumpsum, isUpfront, isWeekly]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientId) {
-      setErr('Select a client first. Add one from the Clients page.');
+      setErr('Select a client first.');
       return;
     }
     if (!(Number(principal) > 0)) {
       setErr('Principal must be greater than 0.');
       return;
     }
-    if (interestType !== 'weekly_upfront_deduction' && Number(interestRate) < 0) {
+    if (!isUpfront && Number(interestRate) < 0) {
       setErr('Interest rate cannot be negative.');
       return;
     }
-    if (!(Number(tenureMonths) > 0)) {
-      setErr(`Tenure must be at least 1 ${isWeekly ? 'week' : 'month'}.`);
+    if (isUpfront && !(Number(upfrontDeduction) >= 0)) {
+      setErr('Please enter a valid upfront deduction amount.');
       return;
     }
+    if (!(Number(tenure) > 0)) {
+      setErr('Tenure must be greater than 0.');
+      return;
+    }
+
     onSubmit({
       clientId,
       principal: Number(principal),
-      interestRate: Number(interestRate) || 0,
+      interestRate: isUpfront ? 0 : Number(interestRate) || 0,
+      upfrontDeduction: isUpfront ? Number(upfrontDeduction) || 0 : undefined,
       startDate: new Date(startDate).toISOString(),
-      tenureMonths: Number(tenureMonths),
+      tenureMonths: Number(tenure),
+      lumpsumUnit: isLumpsum ? lumpsumUnit : undefined,
       interestType,
       purpose: purpose.trim(),
     });
@@ -172,9 +204,11 @@ export function LoanForm({
           ))}
         </Select>
       </Field>
+
       <Field label="Purpose / Note">
         <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Business expansion" />
       </Field>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Principal Amount" required>
           <div className="relative">
@@ -182,8 +216,16 @@ export function LoanForm({
             <Input type="number" min="0" step="any" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="100000" className="pl-8" />
           </div>
         </Field>
-        {interestType !== 'weekly_upfront_deduction' && (
-          <Field label="Annual Interest Rate (%)" required>
+
+        {isUpfront ? (
+          <Field label="Upfront Deduction / Retention" required>
+            <div className="relative">
+              <IndianRupee size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input type="number" min="0" step="any" value={upfrontDeduction} onChange={(e) => setUpfrontDeduction(e.target.value)} placeholder="10000" className="pl-8" />
+            </div>
+          </Field>
+        ) : (
+          <Field label={interestRateLabel} required>
             <div className="relative">
               <Percent size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input type="number" min="0" step="any" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="14" className="pl-8" />
@@ -191,17 +233,31 @@ export function LoanForm({
           </Field>
         )}
       </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Start Date" required>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
-        <Field label={`Tenure (${isWeekly ? 'weeks' : 'months'})`} required>
-          <div className="relative">
-            <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input type="number" min="1" step="1" value={tenureMonths} onChange={(e) => setTenure(e.target.value)} placeholder="12" className="pl-8" />
-          </div>
-        </Field>
+
+        <div className="grid grid-cols-1 gap-2">
+          <Field label={tenureLabel} required>
+            <div className="relative flex gap-2">
+              <div className="relative flex-1">
+                <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input type="number" min="1" step="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="10" className="pl-8" />
+              </div>
+              {isLumpsum && (
+                <Select value={lumpsumUnit} onChange={(e) => setLumpsumUnit(e.target.value as 'days' | 'weeks' | 'months')} className="w-28">
+                  <option value="days">Days</option>
+                  <option value="weeks">Weeks</option>
+                  <option value="months">Months</option>
+                </Select>
+              )}
+            </div>
+          </Field>
+        </div>
       </div>
+
       <Field label="Interest Type" required>
         <Select value={interestType} onChange={(e) => setType(e.target.value as InterestType)}>
           {TYPE_OPTIONS.map((o) => (
@@ -232,7 +288,7 @@ export function LoanForm({
           />
           <PreviewStat
             icon={<Percent size={14} className="text-violet-600" />}
-            label="Total Interest"
+            label="Total Interest / Fee"
             value={formatCurrency(preview.interest, currency, { compact: true })}
           />
         </div>
