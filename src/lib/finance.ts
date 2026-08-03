@@ -275,8 +275,27 @@ export function computePortfolio(data: AppData): PortfolioStats {
     totalReceived += st.received;
     totalOutstanding += st.outstanding;
     totalOverdue += st.arrears;
-    rateSum += loan.interestRate;
-    weighted += loan.interestRate * loan.principal;
+
+    // Convert all rates to an Annualized Rate (p.a.) before weighting
+    let annualizedRate = loan.interestRate;
+    if (
+      loan.interestType === 'interest_only' ||
+      (loan.interestType === 'lumpsum' && loan.lumpsumUnit === 'months')
+    ) {
+      annualizedRate = loan.interestRate * 12;
+    } else if (
+      loan.interestType === 'weekly_interest_only' ||
+      loan.interestType === 'weekly_reducing' ||
+      (loan.interestType === 'lumpsum' && loan.lumpsumUnit === 'weeks')
+    ) {
+      annualizedRate = loan.interestRate * 52;
+    } else if (loan.interestType === 'lumpsum' && loan.lumpsumUnit === 'days') {
+      annualizedRate = (loan.interestRate / 30) * 365;
+    }
+
+    rateSum += annualizedRate;
+    weighted += annualizedRate * loan.principal;
+
     if (st.isClosed) closedLoans++;
     else {
       activeClientIds.add(loan.clientId);
@@ -298,8 +317,8 @@ export function computePortfolio(data: AppData): PortfolioStats {
     closedLoans,
     overdueLoans,
     totalLoans: data.loans.length,
-    avgInterestRate: data.loans.length ? rateSum / data.loans.length : 0,
-    weightedRate: totalLent > 0 ? weighted / totalLent : 0,
+    avgInterestRate: data.loans.length ? round(rateSum / data.loans.length) : 0,
+    weightedRate: totalLent > 0 ? round(weighted / totalLent) : 0,
   };
 }
 
