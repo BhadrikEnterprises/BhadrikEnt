@@ -98,11 +98,13 @@ export function LoanForm({
   const isWeekly = interestType.startsWith('weekly');
   const isLumpsum = interestType === 'lumpsum';
   const isUpfront = interestType === 'weekly_upfront_deduction';
+  const isInterestOnly = interestType === 'interest_only' || interestType === 'weekly_interest_only';
 
   // Dynamic Interest Rate Label
   const interestRateLabel = useMemo(() => {
-    if (isWeekly) return 'Weekly Interest Rate (%)';
+    if (interestType === 'weekly_interest_only') return 'Weekly Interest Rate (%)';
     if (interestType === 'interest_only') return 'Monthly Interest Rate (%)';
+    if (isWeekly) return 'Weekly Interest Rate (%)';
     return 'Annual Interest Rate (%)';
   }, [interestType, isWeekly]);
 
@@ -121,33 +123,49 @@ export function LoanForm({
 
     if (p <= 0 || n <= 0) return null;
 
-    const loan = {
-      id: 'preview',
-      clientId,
-      principal: p,
-      interestRate: r,
-      upfrontDeduction: deduction,
-      startDate: new Date(startDate).toISOString(),
-      tenureMonths: n,
-      lumpsumUnit: isLumpsum ? lumpsumUnit : undefined,
-      interestType,
-      purpose,
-      createdAt: new Date().toISOString(),
-    } as Loan;
+    let installmentAmount = 0;
+    let totalInterest = 0;
+    let totalPayable = 0;
 
-    const sched = generateSchedule(loan);
-    const total = sched.reduce((s, x) => s + x.amount, 0);
-    const interest = isUpfront ? deduction : sched.reduce((s, x) => s + x.interest, 0);
+    if (isInterestOnly) {
+      // Direct periodic rate calculation (monthly or weekly)
+      installmentAmount = (p * r) / 100;
+      totalInterest = installmentAmount * n;
+      totalPayable = p + totalInterest;
+    } else if (isUpfront) {
+      installmentAmount = p / n;
+      totalInterest = deduction;
+      totalPayable = p;
+    } else {
+      const loan = {
+        id: 'preview',
+        clientId,
+        principal: p,
+        interestRate: r,
+        upfrontDeduction: deduction,
+        startDate: new Date(startDate).toISOString(),
+        tenureMonths: n,
+        lumpsumUnit: isLumpsum ? lumpsumUnit : undefined,
+        interestType,
+        purpose,
+        createdAt: new Date().toISOString(),
+      } as Loan;
+
+      const sched = generateSchedule(loan);
+      installmentAmount = sched[0]?.amount ?? 0;
+      totalPayable = sched.reduce((s, x) => s + x.amount, 0);
+      totalInterest = sched.reduce((s, x) => s + x.interest, 0);
+    }
 
     return {
-      installmentAmount: sched[0]?.amount ?? 0,
-      total: isUpfront ? p : total,
-      interest,
+      installmentAmount,
+      total: totalPayable,
+      interest: totalInterest,
       isLumpsum,
-      isInterestOnly: interestType === 'interest_only' || interestType === 'weekly_interest_only',
+      isInterestOnly,
       isWeekly,
     };
-  }, [principal, interestRate, upfrontDeduction, tenure, lumpsumUnit, startDate, interestType, clientId, purpose, isLumpsum, isUpfront, isWeekly]);
+  }, [principal, interestRate, upfrontDeduction, tenure, lumpsumUnit, startDate, interestType, clientId, purpose, isLumpsum, isUpfront, isWeekly, isInterestOnly]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,7 +246,7 @@ export function LoanForm({
           <Field label={interestRateLabel} required>
             <div className="relative">
               <Percent size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input type="number" min="0" step="any" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="14" className="pl-8" />
+              <Input type="number" min="0" step="any" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="5" className="pl-8" />
             </div>
           </Field>
         )}
