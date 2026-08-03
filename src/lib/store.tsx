@@ -1,7 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
-import { addMonths, parseISO, subMonths } from 'date-fns';
 import type { AppData, Client, Loan, Repayment, Settings } from './types';
-import { generateSchedule } from './finance';
 
 const STORAGE_KEY = 'lendbook_p2p_v1';
 
@@ -11,7 +9,6 @@ export const uid = (): string =>
     : Math.random().toString(36).slice(2, 10);
 
 const nowISO = () => new Date().toISOString();
-const ago = (m: number) => subMonths(new Date(), m).toISOString();
 
 type Action =
   | { type: 'ADD_CLIENT'; client: Client }
@@ -87,66 +84,12 @@ function reducer(state: AppData, action: Action): AppData {
 }
 
 export function seedData(): AppData {
-  const clients: Client[] = [
-    { id: 'c1', name: 'Rahul Sharma', email: 'rahul.sharma@gmail.com', phone: '+91 98200 11234', notes: 'Salaried, IT professional', createdAt: ago(14) },
-    { id: 'c2', name: 'Priya Patel', email: 'priya.patel@gmail.com', phone: '+91 90040 55678', notes: 'Small business owner', createdAt: ago(8) },
-    { id: 'c3', name: 'Amit Kumar', email: 'amit.kumar@gmail.com', phone: '+91 99870 33921', notes: 'Restaurant owner', createdAt: ago(6) },
-    { id: 'c4', name: 'Sneha Reddy', email: 'sneha.reddy@gmail.com', phone: '+91 91234 56780', notes: 'Freelance designer', createdAt: ago(14) },
-    { id: 'c5', name: 'Vikram Singh', email: 'vikram.singh@gmail.com', phone: '+91 98110 22345', notes: 'Real estate agent', createdAt: ago(22) },
-    { id: 'c6', name: 'Anjali Gupta', email: 'anjali.gupta@gmail.com', phone: '+91 99001 23456', notes: 'Tutor', createdAt: ago(8) },
-    { id: 'c7', name: 'Rohit Verma', email: 'rohit.verma@gmail.com', phone: '+91 90011 99887', notes: 'Trader', createdAt: ago(10) },
-    { id: 'c8', name: 'Meera Nair', email: 'meera.nair@gmail.com', phone: '+91 98470 11223', notes: 'Consultant', createdAt: ago(3) },
-    { id: 'c9', name: 'Karan Mehta', email: 'karan.mehta@gmail.com', phone: '+91 91500 67123', notes: 'Auto workshop', createdAt: ago(5) },
-  ];
-
-  const loans: Loan[] = [
-    { id: 'l1', clientId: 'c1', principal: 200000, interestRate: 14, startDate: ago(14), tenureMonths: 24, interestType: 'emi', purpose: 'Home renovation', createdAt: ago(14) },
-    { id: 'l2', clientId: 'c2', principal: 150000, interestRate: 12, startDate: ago(8), tenureMonths: 18, interestType: 'interest_only', purpose: 'Working capital', createdAt: ago(8) },
-    { id: 'l3', clientId: 'c3', principal: 500000, interestRate: 16, startDate: ago(6), tenureMonths: 36, interestType: 'emi', purpose: 'Restaurant expansion', createdAt: ago(6) },
-    { id: 'l4', clientId: 'c4', principal: 75000, interestRate: 18, startDate: ago(14), tenureMonths: 12, interestType: 'lumpsum', purpose: 'Equipment purchase', createdAt: ago(14) },
-    { id: 'l5', clientId: 'c5', principal: 300000, interestRate: 15, startDate: ago(22), tenureMonths: 24, interestType: 'emi', purpose: 'Property deal', createdAt: ago(22) },
-    { id: 'l6', clientId: 'c6', principal: 100000, interestRate: 20, startDate: ago(8), tenureMonths: 6, interestType: 'lumpsum', purpose: 'Course fees', createdAt: ago(8) },
-    { id: 'l7', clientId: 'c7', principal: 250000, interestRate: 13, startDate: ago(10), tenureMonths: 24, interestType: 'interest_only', purpose: 'Inventory', createdAt: ago(10) },
-    { id: 'l8', clientId: 'c8', principal: 400000, interestRate: 14, startDate: ago(3), tenureMonths: 30, interestType: 'emi', purpose: 'Business setup', createdAt: ago(3) },
-    { id: 'l9', clientId: 'c9', principal: 180000, interestRate: 17, startDate: ago(5), tenureMonths: 18, interestType: 'emi', purpose: 'Workshop tools', createdAt: ago(5) },
-    { id: 'l10', clientId: 'c1', principal: 120000, interestRate: 15, startDate: ago(2), tenureMonths: 12, interestType: 'emi', purpose: 'Two-wheeler', createdAt: ago(2) },
-  ];
-
-  const repayments: Repayment[] = [];
-  const methods = ['UPI', 'Bank Transfer', 'Cash'];
-  const today = new Date();
-  const partial: Record<string, number> = { l4: 20000, l6: 40000 };
-
-  let ri = 1;
-  for (const loan of loans) {
-    if (partial[loan.id] !== undefined) {
-      repayments.push({
-        id: 'r' + ri++,
-        loanId: loan.id,
-        date: addMonths(parseISO(loan.startDate), 1).toISOString(),
-        amount: partial[loan.id],
-        method: 'Cash',
-        notes: 'Partial repayment',
-      });
-      continue;
-    }
-    const sched = generateSchedule(loan);
-    for (const s of sched) {
-      if (parseISO(s.dueDate) <= today) {
-        repayments.push({
-          id: 'r' + ri++,
-          loanId: loan.id,
-          date: s.dueDate,
-          amount: s.amount,
-          method: methods[s.installment % methods.length],
-          notes: `Installment ${s.installment}/${sched.length}`,
-        });
-      }
-    }
-  }
-
-  const settings: Settings = { currency: 'INR', lenderName: 'My Lending Book' };
-  return { clients, loans, repayments, settings };
+  return {
+    clients: [],
+    loans: [],
+    repayments: [],
+    settings: { currency: 'INR', lenderName: 'Bhadrik Enterprises' },
+  };
 }
 
 function init(): AppData {
@@ -159,7 +102,7 @@ function init(): AppData {
           clients: parsed.clients,
           loans: parsed.loans,
           repayments: parsed.repayments ?? [],
-          settings: parsed.settings ?? { currency: 'INR', lenderName: 'My Lending Book' },
+          settings: parsed.settings ?? { currency: 'INR', lenderName: 'Bhadrik Enterprises' },
         };
       }
     }
