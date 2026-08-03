@@ -1,4 +1,10 @@
-export type InterestType = 'emi' | 'interest_only' | 'lumpsum';
+export type InterestType =
+  | 'emi'
+  | 'interest_only'
+  | 'lumpsum'
+  | 'weekly_reducing'
+  | 'weekly_interest_only'
+  | 'weekly_upfront_deduction';
 
 export interface Client {
   id: string;
@@ -15,10 +21,14 @@ export interface Loan {
   principal: number;
   interestRate: number; // annual percent
   startDate: string; // ISO
-  tenureMonths: number;
+  tenureMonths: number; // acts as tenure length (weeks or months depending on interestType)
   interestType: InterestType;
   purpose: string;
   createdAt: string;
+  // Optional fields for Upfront Deduction / Weekly Finance
+  upfrontDeductionType?: 'percentage' | 'fixed';
+  upfrontDeductionValue?: number;
+  disbursedAmount?: number;
 }
 
 export interface Repayment {
