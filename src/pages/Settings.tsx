@@ -3,26 +3,20 @@ import { useStore } from '../lib/store';
 import { Save, Trash2, Check } from 'lucide-react';
 
 export function Settings() {
-  const { data, setData } = useStore();
+  const { data, updateSettings, clearData } = useStore();
   const [lenderName, setLenderName] = useState(data.settings.lenderName);
   const [currency, setCurrency] = useState(data.settings.currency);
   const [saved, setSaved] = useState(false);
   const [currencySaved, setCurrencySaved] = useState(false);
 
   const handleSave = () => {
-    setData((prev: any) => ({
-      ...prev,
-      settings: { ...prev.settings, lenderName, currency },
-    }));
+    updateSettings({ lenderName });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const handleSaveCurrency = () => {
-    setData((prev: any) => ({
-      ...prev,
-      settings: { ...prev.settings, currency },
-    }));
+    updateSettings({ currency });
     setCurrencySaved(true);
     setTimeout(() => setCurrencySaved(false), 2000);
   };
@@ -33,19 +27,7 @@ export function Settings() {
         'Are you sure you want to delete all present data? This will clear all clients, loans, and repayments so you can upload fresh data.'
       )
     ) {
-      // Clear data inside store state without destroying auth session
-      setData((prev: any) => ({
-        ...prev,
-        clients: [],
-        loans: [],
-        repayments: [],
-      }));
-
-      // Also clear specific local storage keys if your store uses custom key persistence
-      const keysToRemove = ['lendbook_data', 'p2p_data', 'store_data', 'app_data'];
-      keysToRemove.forEach((key) => localStorage.removeItem(key));
-
-      alert('All client, loan, and repayment data has been wiped clean!');
+      clearData();
     }
   };
 
