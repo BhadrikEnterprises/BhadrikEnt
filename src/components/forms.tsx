@@ -68,6 +68,9 @@ const TYPE_OPTIONS: { value: InterestType; label: string; hint: string }[] = [
   { value: 'emi', label: 'EMI · reducing balance', hint: 'Equal monthly installments' },
   { value: 'interest_only', label: 'Interest-only monthly', hint: 'Interest monthly, principal at end' },
   { value: 'lumpsum', label: 'Lumpsum at maturity', hint: 'Single payment with simple interest' },
+  { value: 'weekly_reducing', label: 'Weekly EMI · reducing balance', hint: 'Equal weekly installments' },
+  { value: 'weekly_interest_only', label: 'Weekly Interest-only', hint: 'Interest weekly, principal at end' },
+  { value: 'weekly_upfront_deduction', label: 'Weekly Finance', hint: 'Upfront deduction / retention' },
 ];
 
 export function LoanForm({
@@ -90,6 +93,8 @@ export function LoanForm({
   const [purpose, setPurpose] = useState(initial?.purpose ?? '');
   const [err, setErr] = useState<string>();
 
+  const isWeekly = interestType.startsWith('weekly');
+
   const preview = useMemo(() => {
     const p = Number(principal) || 0;
     const r = Number(interestRate) || 0;
@@ -109,8 +114,15 @@ export function LoanForm({
     const sched = generateSchedule(loan);
     const total = sched.reduce((s, x) => s + x.amount, 0);
     const interest = sched.reduce((s, x) => s + x.interest, 0);
-    return { monthly: sched[0]?.amount ?? 0, total, interest, isLumpsum: interestType === 'lumpsum', isInterestOnly: interestType === 'interest_only' };
-  }, [principal, interestRate, tenureMonths, startDate, interestType, clientId, purpose]);
+    return {
+      installmentAmount: sched[0]?.amount ?? 0,
+      total,
+      interest,
+      isLumpsum: interestType === 'lumpsum',
+      isInterestOnly: interestType === 'interest_only' || interestType === 'weekly_interest_only',
+      isWeekly,
+    };
+  }, [principal, interestRate, tenureMonths, startDate, interestType, clientId, purpose, isWeekly]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,18 +134,18 @@ export function LoanForm({
       setErr('Principal must be greater than 0.');
       return;
     }
-    if (Number(interestRate) < 0) {
+    if (interestType !== 'weekly_upfront_deduction' && Number(interestRate) < 0) {
       setErr('Interest rate cannot be negative.');
       return;
     }
     if (!(Number(tenureMonths) > 0)) {
-      setErr('Tenure must be at least 1 month.');
+      setErr(`Tenure must be at least 1 ${isWeekly ? 'week' : 'month'}.`);
       return;
     }
     onSubmit({
       clientId,
       principal: Number(principal),
-      interestRate: Number(interestRate),
+      interestRate: Number(interestRate) || 0,
       startDate: new Date(startDate).toISOString(),
       tenureMonths: Number(tenureMonths),
       interestType,
@@ -170,18 +182,20 @@ export function LoanForm({
             <Input type="number" min="0" step="any" value={principal} onChange={(e) => setPrincipal(e.target.value)} placeholder="100000" className="pl-8" />
           </div>
         </Field>
-        <Field label="Annual Interest Rate (%)" required>
-          <div className="relative">
-            <Percent size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input type="number" min="0" step="any" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="14" className="pl-8" />
-          </div>
-        </Field>
+        {interestType !== 'weekly_upfront_deduction' && (
+          <Field label="Annual Interest Rate (%)" required>
+            <div className="relative">
+              <Percent size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input type="number" min="0" step="any" value={interestRate} onChange={(e) => setInterestRate(e.target.value)} placeholder="14" className="pl-8" />
+            </div>
+          </Field>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Start Date" required>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
-        <Field label="Tenure (months)" required>
+        <Field label={`Tenure (${isWeekly ? 'weeks' : 'months'})`} required>
           <div className="relative">
             <Clock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input type="number" min="1" step="1" value={tenureMonths} onChange={(e) => setTenure(e.target.value)} placeholder="12" className="pl-8" />
@@ -202,8 +216,14 @@ export function LoanForm({
         <div className="grid grid-cols-3 gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
           <PreviewStat
             icon={<Sparkles size={14} className="text-emerald-600" />}
-            label={preview.isLumpsum ? 'Due at maturity' : preview.isInterestOnly ? 'Monthly interest' : 'Monthly EMI'}
-            value={formatCurrency(preview.monthly, currency, { compact: true })}
+            label={
+              preview.isLumpsum
+                ? 'Due at maturity'
+                : preview.isInterestOnly
+                ? preview.isWeekly ? 'Weekly interest' : 'Monthly interest'
+                : preview.isWeekly ? 'Weekly EMI' : 'Monthly EMI'
+            }
+            value={formatCurrency(preview.installmentAmount, currency, { compact: true })}
           />
           <PreviewStat
             icon={<CalendarClock size={14} className="text-sky-600" />}
