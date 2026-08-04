@@ -193,7 +193,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notes: r.notes ?? '',
       }));
 
-      // Intelligent Merge: Combine local and cloud items uniquely by ID so local additions aren't wiped out if cloud sync lags or returns empty
       const mergedClients = Array.from(
         new Map([...cloudClients, ...data.clients].map((item) => [item.id, item])).values()
       );
@@ -259,6 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
+            clientId: resolvedClientId,
             clientid: resolvedClientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
@@ -284,6 +284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
+            clientId: resolvedClientId,
             clientid: resolvedClientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
