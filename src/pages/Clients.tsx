@@ -83,6 +83,8 @@ export function Clients() {
                   <th className="px-5 py-3 text-left font-semibold">Client</th>
                   <th className="px-5 py-3 text-left font-semibold">Contact</th>
                   <th className="px-5 py-3 text-center font-semibold">Loans</th>
+                  <th className="px-5 py-3 text-right font-semibold">Due This Week</th>
+                  <th className="px-5 py-3 text-right font-semibold">Due This Month</th>
                   <th className="px-5 py-3 text-right font-semibold">Total Lent</th>
                   <th className="px-5 py-3 text-right font-semibold">Outstanding</th>
                   <th className="px-5 py-3 text-right font-semibold">Actions</th>
@@ -122,6 +124,12 @@ export function Clients() {
                       ) : (
                         <span className="text-xs text-slate-300">0</span>
                       )}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-medium text-amber-600 tabular">
+                      {formatCurrency(stats.dueThisWeek, currency, { compact: true })}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-medium text-blue-600 tabular">
+                      {formatCurrency(stats.dueThisMonth, currency, { compact: true })}
                     </td>
                     <td className="px-5 py-3.5 text-right font-medium text-slate-700 tabular">{formatCurrency(stats.totalLent, currency, { compact: true })}</td>
                     <td className="px-5 py-3.5 text-right">
