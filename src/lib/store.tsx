@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import type { AppData, Client, Loan, Repayment, Settings } from './types';
-import { supabase } from './supabase'; // Ensure you have your supabase client configured
+import { supabase } from './supabase';
 
 const STORAGE_KEY = 'lendbook_p2p_v1';
 
@@ -111,22 +111,22 @@ function init(): AppData {
       }
     }
   } catch {
-    /* ignore corrupted storage */
+    /* ignore fallback */
   }
   return seedData();
 }
 
 interface StoreContextValue {
   data: AppData;
-  addClient: (c: Omit<Client, 'id' | 'createdAt'>) => Client;
-  updateClient: (c: Client) => void;
-  deleteClient: (id: string) => void;
-  addLoan: (l: Omit<Loan, 'id' | 'createdAt'>) => Loan;
-  updateLoan: (l: Loan) => void;
-  deleteLoan: (id: string) => void;
-  addRepayment: (r: Omit<Repayment, 'id'>) => void;
-  updateRepayment: (r: Repayment) => void;
-  deleteRepayment: (id: string) => void;
+  addClient: (c: Omit<Client, 'id' | 'createdAt'>) => Promise<Client>;
+  updateClient: (c: Client) => Promise<void>;
+  deleteClient: (id: string) => Promise<void>;
+  addLoan: (l: Omit<Loan, 'id' | 'createdAt'>) => Promise<Loan>;
+  updateLoan: (l: Loan) => Promise<void>;
+  deleteLoan: (id: string) => Promise<void>;
+  addRepayment: (r: Omit<Repayment, 'id'>) => Promise<void>;
+  updateRepayment: (r: Repayment) => Promise<void>;
+  deleteRepayment: (id: string) => Promise<void>;
   importData: (data: AppData, merge?: boolean) => void;
   updateSettings: (s: Partial<Settings>) => void;
   resetData: () => void;
@@ -138,16 +138,16 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
-  // Sync to local storage
+  // Backup to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* storage full or private mode block */
+      /* ignore */
     }
   }, [data]);
 
-  // Fetch initial data from Supabase if available
+  // Initial cloud fetch on app launch
   useEffect(() => {
     async function fetchFromCloud() {
       try {
@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           });
         }
       } catch (e) {
-        console.warn('Cloud sync unavailable, using local cache', e);
+        console.warn('Could not sync with Supabase cloud', e);
       }
     }
 
@@ -180,23 +180,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreContextValue>(
     () => ({
       data,
-      addClient: (c) => {
+      addClient: async (c) => {
         const client: Client = { ...c, id: uid(), createdAt: nowISO() };
         dispatch({ type: 'ADD_CLIENT', client });
+        if (supabase) await supabase.from('clients').insert([client]);
         return client;
       },
-      updateClient: (client) => dispatch({ type: 'UPDATE_CLIENT', client }),
-      deleteClient: (id) => dispatch({ type: 'DELETE_CLIENT', id }),
-      addLoan: (l) => {
+      updateClient: async (client) => {
+        dispatch({ type: 'UPDATE_CLIENT', client });
+        if (supabase) await supabase.from('clients').update(client).eq('id', client.id);
+      },
+      deleteClient: async (id) => {
+        dispatch({ type: 'DELETE_CLIENT', id });
+        if (supabase) await supabase.from('clients').delete().eq('id', id);
+      },
+      addLoan: async (l) => {
         const loan: Loan = { ...l, id: uid(), createdAt: nowISO() };
         dispatch({ type: 'ADD_LOAN', loan });
+        if (supabase) await supabase.from('loans').insert([loan]);
         return loan;
       },
-      updateLoan: (loan) => dispatch({ type: 'UPDATE_LOAN', loan }),
-      deleteLoan: (id) => dispatch({ type: 'DELETE_LOAN', id }),
-      addRepayment: (r) => dispatch({ type: 'ADD_REPAYMENT', repayment: { ...r, id: uid() } }),
-      updateRepayment: (repayment) => dispatch({ type: 'UPDATE_REPAYMENT', repayment }),
-      deleteRepayment: (id) => dispatch({ type: 'DELETE_REPAYMENT', id }),
+      updateLoan: async (loan) => {
+        dispatch({ type: 'UPDATE_LOAN', loan });
+        if (supabase) await supabase.from('loans').update(loan).eq('id', loan.id);
+      },
+      deleteLoan: async (id) => {
+        dispatch({ type: 'DELETE_LOAN', id });
+        if (supabase) await supabase.from('loans').delete().eq('id', id);
+      },
+      addRepayment: async (r) => {
+        const repayment: Repayment = { ...r, id: uid() };
+        dispatch({ type: 'ADD_REPAYMENT', repayment });
+        if (supabase) await supabase.from('repayments').insert([repayment]);
+      },
+      updateRepayment: async (repayment) => {
+        dispatch({ type: 'UPDATE_REPAYMENT', repayment });
+        if (supabase) await supabase.from('repayments').update(repayment).eq('id', repayment.id);
+      },
+      deleteRepayment: async (id) => {
+        dispatch({ type: 'DELETE_REPAYMENT', id });
+        if (supabase) await supabase.from('repayments').delete().eq('id', id);
+      },
       importData: (d, merge = false) => dispatch({ type: merge ? 'MERGE' : 'IMPORT', data: d }),
       updateSettings: (settings) => dispatch({ type: 'UPDATE_SETTINGS', settings }),
       resetData: () => dispatch({ type: 'RESET' }),
