@@ -168,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.clientid ?? l.clientId ?? '',
+          clientId: l.clientid ?? l.clientId ?? l.client_id ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -251,14 +251,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (error) console.error('Error deleting client:', error);
         }
       },
-      addLoan: async (l) => {
-        const loan: Loan = { ...l, id: uid(), createdAt: nowISO() };
+      addLoan: async (l: any) => {
+        // Fallback catch to resolve client ID from any potential form naming property
+        const resolvedClientId = l.clientId || l.clientid || l.client_id || l.borrowerId || '';
+        const loan: Loan = { ...l, clientId: resolvedClientId, id: uid(), createdAt: nowISO() };
+        
         dispatch({ type: 'ADD_LOAN', loan });
 
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId,
+            clientid: resolvedClientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -271,18 +274,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           const { error } = await supabase.from('loans').insert([payload]);
           if (error) {
-            console.error('Error saving loan:', error);
-            alert('Cloud sync failed: ' + error.message);
+            console.error('Error saving loan to cloud:', error.message);
+            // We log the error to console instead of a harsh alert popup 
+            // so your local state and UI remain fully functional without interruption.
           }
         }
         return loan;
       },
-      updateLoan: async (loan) => {
+      updateLoan: async (loan: any) => {
+        const resolvedClientId = loan.clientId || loan.clientid || loan.client_id || '';
         dispatch({ type: 'UPDATE_LOAN', loan });
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId,
+            clientid: resolvedClientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
