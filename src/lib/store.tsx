@@ -258,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId, // explicitly mapped to the required column name
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -337,7 +337,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'DELETE_REPAYMENT', id });
         if (supabase) {
           const { error } = await supabase.from('repayments').delete().eq('id', id);
-          if (error) console.error('Error deleting loan repayment:', error);
+          if (error) console.error('Error deleting repayment:', error);
         }
       },
       importData: (d, merge = false) => dispatch({ type: merge ? 'MERGE' : 'IMPORT', data: d }),
