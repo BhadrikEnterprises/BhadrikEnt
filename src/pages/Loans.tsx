@@ -19,7 +19,7 @@ import { formatCurrency, formatDate, relativeDays, formatLoanType } from '../lib
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LoanForm, RepaymentForm } from '../components/forms';
-import { ScheduleModal } from '../components/ScheduleModal';
+import { ScheduleModal } from '../components';
 import { Button, Card, Input, Badge, EmptyState } from '../components/ui';
 import type { Loan } from '../lib/types';
 
