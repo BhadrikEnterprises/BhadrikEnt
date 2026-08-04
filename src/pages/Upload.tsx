@@ -13,10 +13,12 @@ import {
   Trash2,
   FileJson,
   FileUp,
+  FileText,
 } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
 import { parseCsv, exportCsv, downloadFile, pick } from '../lib/csv';
+import { generateClientStatementPdf } from '../lib/pdf';
 import { formatCurrency } from '../lib/format';
 import { Button, Card, Badge, cn } from '../components/ui';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -40,7 +42,7 @@ function normalizeType(raw?: string): InterestType {
   const v = (raw ?? 'emi').toLowerCase().replace(/[\s-]/g, '_');
   if (v.includes('emi') || v.includes('reducing')) return 'emi';
   if (v.includes('interest_only') || v.includes('interestonly') || v === 'interest') return 'interest_only';
-  if (v.includes('lump') || v.includes('bullet') || v.includes('maturity')) return 'lumpsum';
+  if (v.includes('lump') || v.includes('bullet') || v === 'maturity') return 'lumpsum';
   return 'emi';
 }
 
@@ -230,9 +232,51 @@ export function Upload() {
   const { notify } = useToast();
   const currency = data.settings.currency;
   const [tab, setTab] = useState<TabKey>('clients');
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const jsonInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportStatementPdf = () => {
+    const client = data.clients.find((c) => c.id === selectedClientId);
+    if (!client) {
+      notify('Please select a client first');
+      return;
+    }
+    const clientLoans = data.loans.filter((l) => l.clientId === client.id);
+    const loanIds = new Set(clientLoans.map((l) => l.id));
+    const clientRepayments = data.repayments.filter((r) => loanIds.has(r.loanId));
+
+    generateClientStatementPdf(client, clientLoans, clientRepayments, data.settings);
+    notify(`Statement PDF generated for ${client.name}`);
+  };
+
+  const handleExportStatementCsv = () => {
+    const client = data.clients.find((c) => c.id === selectedClientId);
+    if (!client) {
+      notify('Please select a client first');
+      return;
+    }
+    const clientLoans = data.loans.filter((l) => l.clientId === client.id);
+    const loanIds = new Set(clientLoans.map((l) => l.id));
+    const clientRepayments = data.repayments.filter((r) => loanIds.has(r.loanId));
+
+    const rows = clientRepayments.map((r) => {
+      const loan = clientLoans.find((l) => l.id === r.loanId);
+      return {
+        Client: client.name,
+        'Loan Purpose': loan?.purpose || 'N/A',
+        'Principal Amount': loan?.principal || 0,
+        Date: r.date.slice(0, 10),
+        'Amount Paid': r.amount,
+        Method: r.method,
+        Notes: r.notes,
+      };
+    });
+
+    exportCsv(`statement-${client.name.toLowerCase().replace(/\s+/g, '-')}.csv`, rows);
+    notify(`Statement CSV exported for ${client.name}`);
+  };
 
   const importClients = (records: Omit<Client, 'id' | 'createdAt'>[]) => {
     records.forEach((r) => addClient(r));
@@ -449,77 +493,118 @@ export function Upload() {
             <p className="text-xs text-slate-500">Download your data as CSV or back up everything as JSON</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2.5">
-          <Button variant="outline" size="sm" onClick={() => exportCsv('lendbook-clients.csv', data.clients.map((c) => ({ name: c.name, email: c.email, phone: c.phone, notes: c.notes })))}>
-            <Users size={15} /> Clients CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              exportCsv(
-                'lendbook-loans.csv',
-                data.loans.map((l) => {
-                  const c = data.clients.find((x) => x.id === l.clientId);
-                  return {
-                    client: c?.name ?? '',
-                    principal: l.principal,
-                    rate: l.interestRate,
-                    start: l.startDate.slice(0, 10),
-                    tenure: l.tenureMonths,
-                    type: l.interestType,
-                    purpose: l.purpose,
-                  };
-                })
-              )
-            }
-          >
-            <Landmark size={15} /> Loans CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              exportCsv(
-                'lendbook-repayments.csv',
-                data.repayments.map((r) => {
-                  const loan = data.loans.find((l) => l.id === r.loanId);
-                  const c = data.clients.find((x) => x.id === loan?.clientId);
-                  return {
-                    client: c?.name ?? '',
-                    purpose: loan?.purpose ?? '',
-                    amount: r.amount,
-                    date: r.date.slice(0, 10),
-                    method: r.method,
-                    notes: r.notes,
-                  };
-                })
-              )
-            }
-          >
-            <HandCoins size={15} /> Repayments CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => downloadFile('lendbook-backup.json', JSON.stringify(data, null, 2), 'application/json')}
-          >
-            <FileJson size={15} /> JSON Backup
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => jsonInputRef.current?.click()}>
-            <FileUp size={15} /> Restore JSON
-          </Button>
-          <input
-            ref={jsonInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleJsonImport(f);
-              if (e.target) e.target.value = '';
-            }}
-          />
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2.5">
+            <Button variant="outline" size="sm" onClick={() => exportCsv('lendbook-clients.csv', data.clients.map((c) => ({ name: c.name, email: c.email, phone: c.phone, notes: c.notes })))}>
+              <Users size={15} /> Clients CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportCsv(
+                  'lendbook-loans.csv',
+                  data.loans.map((l) => {
+                    const c = data.clients.find((x) => x.id === l.clientId);
+                    return {
+                      client: c?.name ?? '',
+                      principal: l.principal,
+                      rate: l.interestRate,
+                      start: l.startDate.slice(0, 10),
+                      tenure: l.tenureMonths,
+                      type: l.interestType,
+                      purpose: l.purpose,
+                    };
+                  })
+                )
+              }
+            >
+              <Landmark size={15} /> Loans CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportCsv(
+                  'lendbook-repayments.csv',
+                  data.repayments.map((r) => {
+                    const loan = data.loans.find((l) => l.id === r.loanId);
+                    const c = data.clients.find((x) => x.id === loan?.clientId);
+                    return {
+                      client: c?.name ?? '',
+                      purpose: loan?.purpose ?? '',
+                      amount: r.amount,
+                      date: r.date.slice(0, 10),
+                      method: r.method,
+                      notes: r.notes,
+                    };
+                  })
+                )
+              }
+            >
+              <HandCoins size={15} /> Repayments CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadFile('lendbook-backup.json', JSON.stringify(data, null, 2), 'application/json')}
+            >
+              <FileJson size={15} /> JSON Backup
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => jsonInputRef.current?.click()}>
+              <FileUp size={15} /> Restore JSON
+            </Button>
+            <input
+              ref={jsonInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleJsonImport(f);
+                if (e.target) e.target.value = '';
+              }}
+            />
+          </div>
+
+          <div className="border-t border-slate-100 pt-3">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              Generate Individual Client Statement
+            </label>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              >
+                <option value="">Select a Client...</option>
+                {data.clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportStatementPdf}
+                disabled={!selectedClientId}
+              >
+                <FileText size={15} /> Statement PDF
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportStatementCsv}
+                disabled={!selectedClientId}
+              >
+                <Download size={15} /> Statement CSV
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 
