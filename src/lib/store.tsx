@@ -138,78 +138,97 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
+  // Backup state to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* ignore */
+      /* ignore storage quota limits */
     }
   }, [data]);
 
-  // Initial cloud fetch with automatic formatting fix
-  useEffect(() => {
-    async function fetchFromCloud() {
-      try {
-        if (!supabase) return;
-        const [clientsRes, loansRes, repaymentsRes] = await Promise.all([
-          supabase.from('clients').select('*'),
-          supabase.from('loans').select('*'),
-          supabase.from('repayments').select('*'),
-        ]);
+  // Helper function to pull latest state from Supabase
+  const syncFromCloud = async () => {
+    try {
+      if (!supabase) return;
+      const [clientsRes, loansRes, repaymentsRes] = await Promise.all([
+        supabase.from('clients').select('*'),
+        supabase.from('loans').select('*'),
+        supabase.from('repayments').select('*'),
+      ]);
 
-        if (clientsRes.data || loansRes.data || repaymentsRes.data) {
-          // Map raw SQL rows into safe React TypeScript objects
-          const cleanClients: Client[] = (clientsRes.data || []).map((c: any) => ({
-            id: c.id,
-            name: c.name ?? 'Unknown',
-            phone: c.phone ?? '',
-            email: c.email ?? '',
-            address: c.address ?? '',
-            notes: c.notes ?? '',
-            createdAt: c.createdAt ?? c.createdat ?? nowISO(),
-          }));
+      if (clientsRes.data || loansRes.data || repaymentsRes.data) {
+        const cleanClients: Client[] = (clientsRes.data || []).map((c: any) => ({
+          id: c.id,
+          name: c.name ?? 'Unknown',
+          phone: c.phone ?? '',
+          email: c.email ?? '',
+          address: c.address ?? '',
+          notes: c.notes ?? '',
+          createdAt: c.createdAt ?? c.createdat ?? nowISO(),
+        }));
 
-          const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
-            id: l.id,
-            clientId: l.clientId ?? l.clientid ?? '',
-            amount: Number(l.amount ?? l.principal ?? 0),
-            principal: Number(l.principal ?? l.amount ?? 0),
-            interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
-            startDate: l.startDate ?? l.startdate ?? nowISO(),
-            dueDate: l.dueDate ?? l.duedate ?? '',
-            tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
-            interestType: l.interestType ?? l.loantype ?? l.interest_type ?? 'interest_only',
-            purpose: l.purpose ?? l.notes ?? 'Personal',
-            notes: l.notes ?? '',
-            createdAt: l.createdAt ?? l.createdat ?? nowISO(),
-          }));
+        const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
+          id: l.id,
+          clientId: l.clientId ?? l.clientid ?? '',
+          amount: Number(l.amount ?? l.principal ?? 0),
+          principal: Number(l.principal ?? l.amount ?? 0),
+          interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
+          startDate: l.startDate ?? l.startdate ?? nowISO(),
+          dueDate: l.dueDate ?? l.duedate ?? '',
+          tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
+          interestType: l.interestType ?? l.loantype ?? l.interest_type ?? 'interest_only',
+          purpose: l.purpose ?? l.notes ?? 'Personal',
+          notes: l.notes ?? '',
+          createdAt: l.createdAt ?? l.createdat ?? nowISO(),
+        }));
 
-          const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
-            id: r.id,
-            loanId: r.loanId ?? r.loanid ?? '',
-            amount: Number(r.amount ?? 0),
-            date: r.date ?? nowISO(),
-            method: r.method ?? 'Cash',
-            notes: r.notes ?? '',
-          }));
+        const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
+          id: r.id,
+          loanId: r.loanId ?? r.loanid ?? '',
+          amount: Number(r.amount ?? 0),
+          date: r.date ?? nowISO(),
+          method: r.method ?? 'Cash',
+          notes: r.notes ?? '',
+        }));
 
-          dispatch({
-            type: 'SET_DATA',
-            data: {
-              clients: cleanClients,
-              loans: cleanLoans,
-              repayments: cleanRepayments,
-              settings: data.settings,
-            },
-          });
-        }
-      } catch (e) {
-        console.warn('Could not sync with Supabase cloud', e);
+        dispatch({
+          type: 'SET_DATA',
+          data: {
+            clients: cleanClients,
+            loans: cleanLoans,
+            repayments: cleanRepayments,
+            settings: data.settings,
+          },
+        });
       }
+    } catch (e) {
+      console.warn('Could not sync with Supabase cloud:', e);
     }
+  };
 
-    fetchFromCloud();
+  // 1. Initial Cloud Sync on Mount
+  useEffect(() => {
+    syncFromCloud();
   }, []);
+
+  // 2. Auto Sync on Tab Focus / App Re-open (Essential for Mobile Sync)
+  useEffect(() => {
+    const handleFocus = () => {
+      syncFromCloud();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncFromCloud();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [data.settings]);
 
   const value = useMemo<StoreContextValue>(
     () => ({
@@ -217,43 +236,98 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addClient: async (c) => {
         const client: Client = { ...c, id: uid(), createdAt: nowISO() };
         dispatch({ type: 'ADD_CLIENT', client });
-        if (supabase) await supabase.from('clients').insert([client]);
+        if (supabase) {
+          const { error } = await supabase.from('clients').insert([client]);
+          if (error) console.error('Error saving client:', error);
+        }
         return client;
       },
       updateClient: async (client) => {
         dispatch({ type: 'UPDATE_CLIENT', client });
-        if (supabase) await supabase.from('clients').update(client).eq('id', client.id);
+        if (supabase) {
+          const { error } = await supabase.from('clients').update(client).eq('id', client.id);
+          if (error) console.error('Error updating client:', error);
+        }
       },
       deleteClient: async (id) => {
         dispatch({ type: 'DELETE_CLIENT', id });
-        if (supabase) await supabase.from('clients').delete().eq('id', id);
+        if (supabase) {
+          const { error } = await supabase.from('clients').delete().eq('id', id);
+          if (error) console.error('Error deleting client:', error);
+        }
       },
       addLoan: async (l) => {
         const loan: Loan = { ...l, id: uid(), createdAt: nowISO() };
         dispatch({ type: 'ADD_LOAN', loan });
-        if (supabase) await supabase.from('loans').insert([loan]);
+
+        if (supabase) {
+          const payload = {
+            id: loan.id,
+            clientId: loan.clientId,
+            amount: Number(loan.amount || loan.principal || 0),
+            interestRate: Number(loan.interestRate || 0),
+            startDate: loan.startDate || nowISO(),
+            dueDate: loan.dueDate || null,
+            loanType: loan.interestType || 'interest_only',
+            tenure: Number(loan.tenureMonths || 0),
+            notes: loan.purpose || loan.notes || '',
+            createdAt: loan.createdAt,
+          };
+
+          const { error } = await supabase.from('loans').insert([payload]);
+          if (error) {
+            console.error('Error saving loan:', error);
+            alert('Cloud sync failed for loan: ' + error.message);
+          }
+        }
         return loan;
       },
       updateLoan: async (loan) => {
         dispatch({ type: 'UPDATE_LOAN', loan });
-        if (supabase) await supabase.from('loans').update(loan).eq('id', loan.id);
+        if (supabase) {
+          const payload = {
+            id: loan.id,
+            clientId: loan.clientId,
+            amount: Number(loan.amount || loan.principal || 0),
+            interestRate: Number(loan.interestRate || 0),
+            startDate: loan.startDate || nowISO(),
+            dueDate: loan.dueDate || null,
+            loanType: loan.interestType || 'interest_only',
+            tenure: Number(loan.tenureMonths || 0),
+            notes: loan.purpose || loan.notes || '',
+          };
+          const { error } = await supabase.from('loans').update(payload).eq('id', loan.id);
+          if (error) console.error('Error updating loan:', error);
+        }
       },
       deleteLoan: async (id) => {
         dispatch({ type: 'DELETE_LOAN', id });
-        if (supabase) await supabase.from('loans').delete().eq('id', id);
+        if (supabase) {
+          const { error } = await supabase.from('loans').delete().eq('id', id);
+          if (error) console.error('Error deleting loan:', error);
+        }
       },
       addRepayment: async (r) => {
         const repayment: Repayment = { ...r, id: uid() };
         dispatch({ type: 'ADD_REPAYMENT', repayment });
-        if (supabase) await supabase.from('repayments').insert([repayment]);
+        if (supabase) {
+          const { error } = await supabase.from('repayments').insert([repayment]);
+          if (error) console.error('Error saving repayment:', error);
+        }
       },
       updateRepayment: async (repayment) => {
         dispatch({ type: 'UPDATE_REPAYMENT', repayment });
-        if (supabase) await supabase.from('repayments').update(repayment).eq('id', repayment.id);
+        if (supabase) {
+          const { error } = await supabase.from('repayments').update(repayment).eq('id', repayment.id);
+          if (error) console.error('Error updating repayment:', error);
+        }
       },
       deleteRepayment: async (id) => {
         dispatch({ type: 'DELETE_REPAYMENT', id });
-        if (supabase) await supabase.from('repayments').delete().eq('id', id);
+        if (supabase) {
+          const { error } = await supabase.from('repayments').delete().eq('id', id);
+          if (error) console.error('Error deleting repayment:', error);
+        }
       },
       importData: (d, merge = false) => dispatch({ type: merge ? 'MERGE' : 'IMPORT', data: d }),
       updateSettings: (settings) => dispatch({ type: 'UPDATE_SETTINGS', settings }),
