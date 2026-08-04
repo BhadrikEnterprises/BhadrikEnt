@@ -40,11 +40,29 @@ export function Dashboard() {
   const portfolio = useMemo(() => computePortfolio(data), [data]);
   const monthly = useMemo(() => getMonthlySeries(data, 12), [data]);
 
+  // Robust fallback calculation to ensure active loans and active clients display accurately
+  const calculatedActiveStats = useMemo(() => {
+    const activeLoansList = data.loans.filter((l: any) => {
+      const stats = computeLoanStats(l, data.repayments);
+      const isExplicitlyClosed = stats.isClosed || l.status === 'closed';
+      return !isExplicitlyClosed;
+    });
+
+    const activeClientIds = new Set(
+      activeLoansList.map((l: any) => l.clientId || l.clientid).filter(Boolean)
+    );
+
+    return {
+      activeLoansCount: activeLoansList.length,
+      activeClientsCount: Math.max(portfolio.activeClients, activeClientIds.size),
+    };
+  }, [data, portfolio.activeClients]);
+
   const upcomingAndOverdue = useMemo(() => {
     const items = data.loans
       .map((l) => {
         const st = computeLoanStats(l, data.repayments);
-        const client = data.clients.find((c) => c.id === l.clientId);
+        const client = data.clients.find((c) => c.id === l.clientId || (l as any).clientid === c.id);
         return { loan: l, client, stats: st };
       })
       .filter((x) => !x.stats.isClosed && (x.stats.isOverdue || x.stats.nextDueDate));
@@ -69,7 +87,7 @@ export function Dashboard() {
       .slice(0, 6)
       .map((r) => {
         const loan = data.loans.find((l) => l.id === r.loanId);
-        const client = data.clients.find((c) => c.id === loan?.clientId);
+        const client = data.clients.find((c) => c.id === loan?.clientId || (loan as any)?.clientid === c.id);
         return { repayment: r, loan, client };
       });
   }, [data]);
@@ -143,8 +161,8 @@ export function Dashboard() {
 
       {/* Mini stats strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <MiniStat icon={<Users size={15} />} label="Active clients" value={String(portfolio.activeClients)} />
-        <MiniStat icon={<Landmark size={15} />} label="Active loans" value={String(portfolio.activeLoans)} />
+        <MiniStat icon={<Users size={15} />} label="Active clients" value={String(calculatedActiveStats.activeClientsCount)} />
+        <MiniStat icon={<Landmark size={15} />} label="Active loans" value={String(calculatedActiveStats.activeLoansCount)} />
         <MiniStat icon={<CheckCircle2 size={15} />} label="Closed loans" value={String(portfolio.closedLoans)} />
         <MiniStat icon={<TrendingUp size={15} />} label="Weighted rate" value={`${portfolio.weightedRate.toFixed(1)}%`} />
         <MiniStat icon={<IndianRupee size={15} />} label="Collection rate" value={`${portfolio.collectionRate.toFixed(1)}%`} />
