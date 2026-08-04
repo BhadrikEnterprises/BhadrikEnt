@@ -243,24 +243,70 @@ export function Upload() {
       return;
     }
     const clientLoans = data.loans.filter((l) => l.clientId === client.id);
-    const loanIds = new Set(clientLoans.map((l) => l.id));
-    const clientRepayments = data.repayments.filter((r) => loanIds.has(r.loanId));
+    if (clientLoans.length === 0) {
+      notify('No loans found for this client');
+      return;
+    }
 
-    const rows = clientRepayments.map((r) => {
-      const loan = clientLoans.find((l) => l.id === r.loanId);
-      return {
-        Client: client.name,
-        'Loan Purpose': loan?.purpose || 'N/A',
-        'Principal Amount': loan?.principal || 0,
-        Date: r.date.slice(0, 10),
-        'Amount Paid': r.amount,
-        Method: r.method,
-        Notes: r.notes,
-      };
+    const rows: Record<string, any>[] = [];
+
+    // 1. Add individual loan & repayment mapping rows (includes loans with no repayments)
+    clientLoans.forEach((loan) => {
+      const loanRepayments = data.repayments.filter((r) => r.loanId === loan.id);
+      
+      if (loanRepayments.length === 0) {
+        rows.push({
+          Type: 'Loan Item',
+          Client: client.name,
+          'Loan Purpose': loan.purpose || 'N/A',
+          'Principal Amount': loan.principal,
+          'Interest Rate (%)': loan.interestRate,
+          'Tenure (Months)': loan.tenureMonths,
+          'Payment Date': 'No repayments yet',
+          'Amount Paid': 0,
+          Method: '—',
+          Notes: loan.purpose,
+        });
+      } else {
+        loanRepayments.forEach((r) => {
+          rows.push({
+            Type: 'Repayment',
+            Client: client.name,
+            'Loan Purpose': loan.purpose || 'N/A',
+            'Principal Amount': loan.principal,
+            'Interest Rate (%)': loan.interestRate,
+            'Tenure (Months)': loan.tenureMonths,
+            'Payment Date': r.date.slice(0, 10),
+            'Amount Paid': r.amount,
+            Method: r.method,
+            Notes: r.notes,
+          });
+        });
+      }
+    });
+
+    // 2. Add a Summary section at the bottom of the CSV
+    const totalPrincipal = clientLoans.reduce((sum, l) => sum + l.principal, 0);
+    const allLoanIds = new Set(clientLoans.map((l) => l.id));
+    const totalPaid = data.repayments
+      .filter((r) => allLoanIds.has(r.loanId))
+      .reduce((sum, r) => sum + r.amount, 0);
+
+    rows.push({
+      Type: 'SUMMARY TOTAL',
+      Client: client.name,
+      'Loan Purpose': `Total Loans: ${clientLoans.length}`,
+      'Principal Amount': totalPrincipal,
+      'Interest Rate (%)': '',
+      'Tenure (Months)': '',
+      'Payment Date': 'Total Paid:',
+      'Amount Paid': totalPaid,
+      Method: '',
+      Notes: `Outstanding Balance: ${totalPrincipal - totalPaid}`,
     });
 
     exportCsv(`statement-${client.name.toLowerCase().replace(/\s+/g, '-')}.csv`, rows);
-    notify(`Statement CSV exported for ${client.name}`);
+    notify(`Complete statement CSV exported for ${client.name}`);
   };
 
   const importClients = (records: Omit<Client, 'id' | 'createdAt'>[]) => {
