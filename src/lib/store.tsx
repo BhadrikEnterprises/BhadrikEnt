@@ -168,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.clientid ?? l.cilentid ?? l.clientId ?? '',
+          clientId: l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -256,8 +256,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_LOAN', loan });
 
         if (supabase) {
-          const payload: any = {
+          const payload = {
             id: loan.id,
+            clientid: loan.clientId, // explicitly mapped to the required column name
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -279,8 +280,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateLoan: async (loan) => {
         dispatch({ type: 'UPDATE_LOAN', loan });
         if (supabase) {
-          const payload: any = {
+          const payload = {
             id: loan.id,
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -335,7 +337,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'DELETE_REPAYMENT', id });
         if (supabase) {
           const { error } = await supabase.from('repayments').delete().eq('id', id);
-          if (error) console.error('Error deleting repayment:', error);
+          if (error) console.error('Error deleting loan repayment:', error);
         }
       },
       importData: (d, merge = false) => dispatch({ type: merge ? 'MERGE' : 'IMPORT', data: d }),
