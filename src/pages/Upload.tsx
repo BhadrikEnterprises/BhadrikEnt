@@ -18,7 +18,6 @@ import {
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
 import { parseCsv, exportCsv, downloadFile, pick } from '../lib/csv';
-import { generateClientStatementPdf } from '../lib/pdf';
 import { formatCurrency } from '../lib/format';
 import { Button, Card, Badge, cn } from '../components/ui';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -236,20 +235,6 @@ export function Upload() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const jsonInputRef = useRef<HTMLInputElement>(null);
-
-  const handleExportStatementPdf = () => {
-    const client = data.clients.find((c) => c.id === selectedClientId);
-    if (!client) {
-      notify('Please select a client first');
-      return;
-    }
-    const clientLoans = data.loans.filter((l) => l.clientId === client.id);
-    const loanIds = new Set(clientLoans.map((l) => l.id));
-    const clientRepayments = data.repayments.filter((r) => loanIds.has(r.loanId));
-
-    generateClientStatementPdf(client, clientLoans, clientRepayments, data.settings);
-    notify(`Statement PDF generated for ${client.name}`);
-  };
 
   const handleExportStatementCsv = () => {
     const client = data.clients.find((c) => c.id === selectedClientId);
@@ -589,19 +574,10 @@ export function Upload() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleExportStatementPdf}
-                disabled={!selectedClientId}
-              >
-                <FileText size={15} /> Statement PDF
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={handleExportStatementCsv}
                 disabled={!selectedClientId}
               >
-                <Download size={15} /> Statement CSV
+                <FileText size={15} /> Statement CSV
               </Button>
             </div>
           </div>
