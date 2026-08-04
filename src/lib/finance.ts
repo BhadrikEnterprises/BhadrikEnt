@@ -380,9 +380,9 @@ export function computeClientStats(
   const nextWeekEnd = addWeeks(thisWeekEnd, 1);
 
   const thisMonthStart = startOfMonth(today);
-  const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
   const nextMonthStart = startOfMonth(addMonths(today, 1));
-  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0, 23, 59, 59);
 
   for (const l of loans) {
     const st = computeLoanStats(l, data.repayments, today);
@@ -391,20 +391,37 @@ export function computeClientStats(
     outstanding += st.outstanding;
     overdue += st.arrears;
 
-    if (st.nextDueDate && !st.isClosed) {
-      const d = parseISO(st.nextDueDate);
-      
-      if (d >= thisWeekStart && d <= thisWeekEnd) {
-        dueThisWeek += st.nextDueAmount;
-      }
-      if (d >= nextWeekStart && d <= nextWeekEnd) {
-        dueNextWeek += st.nextDueAmount;
-      }
-      if (d >= thisMonthStart && d <= thisMonthEnd) {
-        dueThisMonth += st.nextDueAmount;
-      }
-      if (d >= nextMonthStart && d <= nextMonthEnd) {
-        dueNextMonth += st.nextDueAmount;
+    if (!st.isClosed) {
+      // Calculate total payments received for this loan
+      const loanPayments = sum(
+        data.repayments.filter((r) => r.loanId === l.id).map((r) => r.amount)
+      );
+
+      let cumScheduleAmount = 0;
+
+      // Loop through all schedule installments to calculate totals due across intervals
+      for (const row of st.schedule) {
+        cumScheduleAmount += row.amount;
+
+        // Skip installments that are already fully paid
+        if (loanPayments >= cumScheduleAmount) {
+          continue;
+        }
+
+        const d = parseISO(row.dueDate);
+
+        if (d >= thisWeekStart && d <= thisWeekEnd) {
+          dueThisWeek += row.amount;
+        }
+        if (d >= nextWeekStart && d <= nextWeekEnd) {
+          dueNextWeek += row.amount;
+        }
+        if (d >= thisMonthStart && d <= thisMonthEnd) {
+          dueThisMonth += row.amount;
+        }
+        if (d >= nextMonthStart && d <= nextMonthEnd) {
+          dueNextMonth += row.amount;
+        }
       }
     }
   }
