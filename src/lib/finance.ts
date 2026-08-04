@@ -8,6 +8,10 @@ import {
   parseISO,
   startOfMonth,
   subMonths,
+  startOfWeek,
+  endOfWeek,
+  startOfNextWeek,
+  endOfNextWeek,
 } from 'date-fns';
 import type { AppData, Loan, Repayment } from './types';
 
@@ -352,7 +356,9 @@ export interface ClientStats {
   outstanding: number;
   overdue: number;
   dueThisWeek: number;
+  dueNextWeek: number;
   dueThisMonth: number;
+  dueNextMonth: number;
 }
 
 export function computeClientStats(
@@ -366,11 +372,19 @@ export function computeClientStats(
   let outstanding = 0;
   let overdue = 0;
   let dueThisWeek = 0;
+  let dueNextWeek = 0;
   let dueThisMonth = 0;
+  let dueNextMonth = 0;
 
-  const endOfWeek = new Date(today);
-  endOfWeek.setDate(today.getDate() + 7);
-  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const thisWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
+  const nextWeekStart = startOfNextWeek(today, { weekStartsOn: 1 });
+  const nextWeekEnd = endOfNextWeek(today, { weekStartsOn: 1 });
+
+  const thisMonthStart = startOfMonth(today);
+  const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const nextMonthStart = startOfMonth(addMonths(today, 1));
+  const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0);
 
   for (const l of loans) {
     const st = computeLoanStats(l, data.repayments, today);
@@ -381,11 +395,18 @@ export function computeClientStats(
 
     if (st.nextDueDate && !st.isClosed) {
       const d = parseISO(st.nextDueDate);
-      if (d >= today && d <= endOfWeek) {
+      
+      if (d >= thisWeekStart && d <= thisWeekEnd) {
         dueThisWeek += st.nextDueAmount;
       }
-      if (d >= today && d <= endOfMonth) {
+      if (d >= nextWeekStart && d <= nextWeekEnd) {
+        dueNextWeek += st.nextDueAmount;
+      }
+      if (d >= thisMonthStart && d <= thisMonthEnd) {
         dueThisMonth += st.nextDueAmount;
+      }
+      if (d >= nextMonthStart && d <= nextMonthEnd) {
+        dueNextMonth += st.nextDueAmount;
       }
     }
   }
@@ -397,6 +418,8 @@ export function computeClientStats(
     outstanding: round(outstanding),
     overdue: round(overdue),
     dueThisWeek: round(dueThisWeek),
+    dueNextWeek: round(dueNextWeek),
     dueThisMonth: round(dueThisMonth),
+    dueNextMonth: round(dueNextMonth),
   };
 }
