@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { CalendarClock, IndianRupee, Percent, Clock, Sparkles } from 'lucide-react';
+import { CalendarClock, IndianRupee, Percent, Clock, Sparkles, Hash } from 'lucide-react';
 import type { Client, InterestType, Loan, Repayment } from '../lib/types';
 import { useStore } from '../lib/store';
 import { generateSchedule } from '../lib/finance';
-import { formatCurrency, todayISODate, toISODate } from '../lib/format';
+import { formatCurrency, todayISODate, toISODate, formatDate } from '../lib/format';
 import { Button, Field, Input, Select, Textarea } from './ui';
 
 interface BaseProps {
@@ -84,6 +84,16 @@ export function LoanForm({
 }) {
   const { data } = useStore();
   const currency = data.settings.currency;
+
+  const nextDefaultNumber = useMemo(() => {
+    const existingNums = data.loans
+      .map((l) => parseInt(l.loanNumber || '0', 10))
+      .filter((n) => !isNaN(n));
+    const max = existingNums.length > 0 ? Math.max(...existingNums) : 0;
+    return String(max + 1);
+  }, [data.loans]);
+
+  const [loanNumber, setLoanNumber] = useState(initial?.loanNumber ?? nextDefaultNumber);
   const [clientId, setClientId] = useState(initial?.clientId ?? data.clients[0]?.id ?? '');
   const [principal, setPrincipal] = useState(initial ? String(initial.principal) : '');
   const [interestRate, setInterestRate] = useState(initial ? String(initial.interestRate) : '');
@@ -133,19 +143,15 @@ export function LoanForm({
 
     if (isLumpsum) {
       if (lumpsumUnit === 'days') {
-        // Monthly interest prorated per day (using 30-day baseline)
         totalInterest = p * (r / 100) * (n / 30);
       } else if (lumpsumUnit === 'weeks') {
-        // Weekly interest rate * number of weeks
         totalInterest = p * (r / 100) * n;
       } else {
-        // Monthly interest rate * number of months
         totalInterest = p * (r / 100) * n;
       }
       totalPayable = p + totalInterest;
       installmentAmount = totalPayable;
     } else if (isInterestOnly) {
-      // Direct periodic rate calculation (monthly or weekly)
       installmentAmount = (p * r) / 100;
       totalInterest = installmentAmount * n;
       totalPayable = p + totalInterest;
@@ -208,6 +214,7 @@ export function LoanForm({
     }
 
     onSubmit({
+      loanNumber: loanNumber.trim() || nextDefaultNumber,
       clientId,
       principal: Number(principal),
       interestRate: isUpfront ? 0 : Number(interestRate) || 0,
@@ -230,15 +237,28 @@ export function LoanForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <Field label="Client" required>
-        <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-          {data.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="sm:col-span-1">
+          <Field label="Loan # / ID" required>
+            <div className="relative">
+              <Hash size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input value={loanNumber} onChange={(e) => setLoanNumber(e.target.value)} placeholder="e.g. 1 or LN-101" className="pl-8" required />
+            </div>
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Client" required>
+            <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              {data.clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </div>
 
       <Field label="Purpose / Note">
         <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Business expansion" />
@@ -431,9 +451,11 @@ export function RepaymentForm({
         <Select value={loanId} onChange={(e) => setLoanId(e.target.value)}>
           {activeLoans.map((l) => {
             const c = data.clients.find((x) => x.id === l.clientId);
+            const numTag = l.loanNumber ? `Loan #${l.loanNumber}` : `Loan #${l.id.slice(0, 4)}`;
+            const dateStr = formatDate(l.startDate, 'dd MMM yyyy');
             return (
               <option key={l.id} value={l.id}>
-                {c?.name ?? 'Unknown'} — {l.purpose || 'Loan'} · {formatCurrency(l.principal, currency, { compact: true })}
+                {numTag} · {c?.name ?? 'Unknown'} — {l.purpose || 'Loan'} · {formatCurrency(l.principal, currency, { compact: true })} ({dateStr})
               </option>
             );
           })}
