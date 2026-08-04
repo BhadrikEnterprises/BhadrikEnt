@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 import type { AppData, Client, Loan, Repayment, Settings } from './types';
+import { supabase } from './supabase'; // Ensure you have your supabase client configured
 
 const STORAGE_KEY = 'lendbook_p2p_v1';
 
@@ -11,6 +12,7 @@ export const uid = (): string =>
 const nowISO = () => new Date().toISOString();
 
 type Action =
+  | { type: 'SET_DATA'; data: AppData }
   | { type: 'ADD_CLIENT'; client: Client }
   | { type: 'UPDATE_CLIENT'; client: Client }
   | { type: 'DELETE_CLIENT'; id: string }
@@ -28,6 +30,8 @@ type Action =
 
 function reducer(state: AppData, action: Action): AppData {
   switch (action.type) {
+    case 'SET_DATA':
+      return action.data;
     case 'ADD_CLIENT':
       return { ...state, clients: [action.client, ...state.clients] };
     case 'UPDATE_CLIENT':
@@ -134,13 +138,44 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
+  // Sync to local storage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* storage may be full or blocked */
+      /* storage full or private mode block */
     }
   }, [data]);
+
+  // Fetch initial data from Supabase if available
+  useEffect(() => {
+    async function fetchFromCloud() {
+      try {
+        if (!supabase) return;
+        const [clientsRes, loansRes, repaymentsRes] = await Promise.all([
+          supabase.from('clients').select('*'),
+          supabase.from('loans').select('*'),
+          supabase.from('repayments').select('*'),
+        ]);
+
+        if (clientsRes.data || loansRes.data || repaymentsRes.data) {
+          dispatch({
+            type: 'SET_DATA',
+            data: {
+              clients: clientsRes.data || [],
+              loans: loansRes.data || [],
+              repayments: repaymentsRes.data || [],
+              settings: data.settings,
+            },
+          });
+        }
+      } catch (e) {
+        console.warn('Cloud sync unavailable, using local cache', e);
+      }
+    }
+
+    fetchFromCloud();
+  }, []);
 
   const value = useMemo<StoreContextValue>(
     () => ({
