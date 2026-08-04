@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.clientId ?? l.clientid ?? '',
+          clientId: l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -178,8 +178,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           startDate: l.startDate ?? l.startdate ?? nowISO(),
           dueDate: l.dueDate ?? l.duedate ?? '',
           tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
-          interestType:
-            l.interestType ?? l.interest_type ?? l.loanType ?? l.loantype ?? 'interest_only',
+          interestType: l.loanType ?? l.loantype ?? l.interestType ?? l.interest_type ?? 'interest_only',
           purpose: l.purpose ?? l.notes ?? 'Personal',
           notes: l.notes ?? '',
           createdAt: l.createdAt ?? l.createdat ?? nowISO(),
@@ -187,7 +186,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
           id: r.id,
-          loanId: r.loanId ?? r.loanid ?? '',
+          loanId: r.loanid ?? r.loanId ?? '',
           amount: Number(r.amount ?? 0),
           date: r.date ?? nowISO(),
           method: r.method ?? 'Cash',
@@ -263,17 +262,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientId: loan.clientId,
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
-            interestRate: Number(loan.interestRate || 0),
-            upfrontDeduction: Number((loan as any).upfrontDeduction || 0),
-            startDate: loan.startDate || nowISO(),
-            dueDate: loan.dueDate || null,
-            loanType: loan.interestType || 'interest_only',
-            interestType: loan.interestType || 'interest_only',
+            interestrate: Number(loan.interestRate || 0),
+            startdate: loan.startDate || nowISO(),
+            duedate: loan.dueDate || null,
+            loantype: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
-            createdAt: loan.createdAt,
+            createdat: loan.createdAt,
           };
 
           const { error } = await supabase.from('loans').insert([payload]);
@@ -289,14 +286,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientId: loan.clientId,
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
-            interestRate: Number(loan.interestRate || 0),
-            upfrontDeduction: Number((loan as any).upfrontDeduction || 0),
-            startDate: loan.startDate || nowISO(),
-            dueDate: loan.dueDate || null,
-            loanType: loan.interestType || 'interest_only',
-            interestType: loan.interestType || 'interest_only',
+            interestrate: Number(loan.interestRate || 0),
+            startdate: loan.startDate || nowISO(),
+            duedate: loan.dueDate || null,
+            loantype: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
           };
@@ -315,14 +310,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const repayment: Repayment = { ...r, id: uid() };
         dispatch({ type: 'ADD_REPAYMENT', repayment });
         if (supabase) {
-          const { error } = await supabase.from('repayments').insert([repayment]);
+          const payload = {
+            id: repayment.id,
+            loanid: repayment.loanId,
+            amount: repayment.amount,
+            date: repayment.date,
+            method: repayment.method,
+            notes: repayment.notes,
+          };
+          const { error } = await supabase.from('repayments').insert([payload]);
           if (error) console.error('Error saving repayment:', error);
         }
       },
       updateRepayment: async (repayment) => {
         dispatch({ type: 'UPDATE_REPAYMENT', repayment });
         if (supabase) {
-          const { error } = await supabase.from('repayments').update(repayment).eq('id', repayment.id);
+          const payload = {
+            id: repayment.id,
+            loanid: repayment.loanId,
+            amount: repayment.amount,
+            date: repayment.date,
+            method: repayment.method,
+            notes: repayment.notes,
+          };
+          const { error } = await supabase.from('repayments').update(payload).eq('id', repayment.id);
           if (error) console.error('Error updating repayment:', error);
         }
       },
