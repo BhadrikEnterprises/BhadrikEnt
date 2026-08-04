@@ -82,24 +82,12 @@ export function relativeDays(iso: string): string {
 
 export function formatLoanType(type?: string): string {
   if (!type) return 'Standard';
-  switch (type.toLowerCase()) {
-    case 'interest_only':
-    case 'int-only':
-      return 'Int-only';
-    case 'weekly_upfront_deduction':
-    case 'upfront_deduction':
-    case 'upfront':
-      return 'Upfront Wkly';
-    case 'weekly_interest_only':
-      return 'Weekly Int';
-    case 'weekly_reducing':
-    case 'weekly':
-      return 'Weekly';
-    case 'emi':
-      return 'EMI';
-    case 'lumpsum':
-      return 'Lumpsum';
-    default:
-      return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-  }
+  const clean = type.toLowerCase().trim();
+  if (clean.includes('int') && clean.includes('only')) return 'Int-only';
+  if (clean.includes('upfront')) return 'Upfront Wkly';
+  if (clean.includes('weekly_interest') || clean === 'weekly int') return 'Weekly Int';
+  if (clean.includes('weekly')) return 'Weekly';
+  if (clean === 'emi') return 'EMI';
+  if (clean === 'lumpsum') return 'Lumpsum';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 }
