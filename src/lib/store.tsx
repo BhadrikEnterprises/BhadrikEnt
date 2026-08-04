@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.clientid ?? l.clientId ?? '',
+          clientId: l.cilentid ?? l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -262,7 +262,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId,
+            cilentid: loan.clientId, // matches database column spelling typo
             amount: Number(loan.amount || loan.principal || 0),
             interestrate: Number(loan.interestRate || 0),
             startdate: loan.startDate || nowISO(),
@@ -286,7 +286,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId,
+            cilentid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestrate: Number(loan.interestRate || 0),
             startdate: loan.startDate || nowISO(),
