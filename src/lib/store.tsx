@@ -138,7 +138,7 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
-  // Backup state to localStorage
+  // Local storage backup
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -147,7 +147,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [data]);
 
-  // Helper function to pull latest state from Supabase
+  // Main sync function to pull accurate data from Supabase
   const syncFromCloud = async () => {
     try {
       if (!supabase) return;
@@ -174,10 +174,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
+          upfrontDeduction: Number(l.upfrontDeduction ?? l.upfront_deduction ?? 0),
           startDate: l.startDate ?? l.startdate ?? nowISO(),
           dueDate: l.dueDate ?? l.duedate ?? '',
           tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
-          interestType: l.interestType ?? l.loantype ?? l.interest_type ?? 'interest_only',
+          interestType:
+            l.interestType ?? l.interest_type ?? l.loanType ?? l.loantype ?? 'interest_only',
           purpose: l.purpose ?? l.notes ?? 'Personal',
           notes: l.notes ?? '',
           createdAt: l.createdAt ?? l.createdat ?? nowISO(),
@@ -207,18 +209,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 1. Initial Cloud Sync on Mount
+  // Initial load
   useEffect(() => {
     syncFromCloud();
   }, []);
 
-  // 2. Auto Sync on Tab Focus / App Re-open (Essential for Mobile Sync)
+  // Refresh automatically when opening/focusing app tab on mobile
   useEffect(() => {
-    const handleFocus = () => {
-      syncFromCloud();
-    };
-
+    const handleFocus = () => syncFromCloud();
     window.addEventListener('focus', handleFocus);
+
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') syncFromCloud();
     };
@@ -266,9 +266,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             clientId: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
+            upfrontDeduction: Number((loan as any).upfrontDeduction || 0),
             startDate: loan.startDate || nowISO(),
             dueDate: loan.dueDate || null,
             loanType: loan.interestType || 'interest_only',
+            interestType: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
             createdAt: loan.createdAt,
@@ -277,7 +279,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const { error } = await supabase.from('loans').insert([payload]);
           if (error) {
             console.error('Error saving loan:', error);
-            alert('Cloud sync failed for loan: ' + error.message);
+            alert('Cloud sync failed: ' + error.message);
           }
         }
         return loan;
@@ -290,9 +292,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             clientId: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
+            upfrontDeduction: Number((loan as any).upfrontDeduction || 0),
             startDate: loan.startDate || nowISO(),
             dueDate: loan.dueDate || null,
             loanType: loan.interestType || 'interest_only',
+            interestType: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
           };
