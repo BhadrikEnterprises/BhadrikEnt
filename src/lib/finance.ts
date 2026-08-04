@@ -267,7 +267,6 @@ export function computePortfolio(data: AppData): PortfolioStats {
 
   for (const loan of data.loans) {
     const st = computeLoanStats(loan, data.repayments, today);
-    // Use net disbursed amount if applicable, otherwise full principal
     const actualDisbursed = loan.disbursedAmount ?? loan.principal;
     totalLent += actualDisbursed;
     totalReceivable += st.totalPayable;
@@ -276,7 +275,6 @@ export function computePortfolio(data: AppData): PortfolioStats {
     totalOutstanding += st.outstanding;
     totalOverdue += st.arrears;
 
-    // Convert all rates to an Annualized Rate (p.a.) before weighting
     let annualizedRate = loan.interestRate;
     if (
       loan.interestType === 'interest_only' ||
@@ -353,6 +351,8 @@ export interface ClientStats {
   totalReceived: number;
   outstanding: number;
   overdue: number;
+  dueThisWeek: number;
+  dueThisMonth: number;
 }
 
 export function computeClientStats(
@@ -365,18 +365,38 @@ export function computeClientStats(
   let totalReceived = 0;
   let outstanding = 0;
   let overdue = 0;
+  let dueThisWeek = 0;
+  let dueThisMonth = 0;
+
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(today.getDate() + 7);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
   for (const l of loans) {
     const st = computeLoanStats(l, data.repayments, today);
     totalLent += l.disbursedAmount ?? l.principal;
     totalReceived += st.received;
     outstanding += st.outstanding;
     overdue += st.arrears;
+
+    if (st.nextDueDate && !st.isClosed) {
+      const d = parseISO(st.nextDueDate);
+      if (d >= today && d <= endOfWeek) {
+        dueThisWeek += st.nextDueAmount;
+      }
+      if (d >= today && d <= endOfMonth) {
+        dueThisMonth += st.nextDueAmount;
+      }
+    }
   }
+
   return {
     loanCount: loans.length,
     totalLent: round(totalLent),
     totalReceived: round(totalReceived),
     outstanding: round(outstanding),
     overdue: round(overdue),
+    dueThisWeek: round(dueThisWeek),
+    dueThisMonth: round(dueThisMonth),
   };
 }
