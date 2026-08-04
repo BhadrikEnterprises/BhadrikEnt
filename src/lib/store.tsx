@@ -40,11 +40,11 @@ function reducer(state: AppData, action: Action): AppData {
         clients: state.clients.map((c) => (c.id === action.client.id ? action.client : c)),
       };
     case 'DELETE_CLIENT': {
-      const loanIds = state.loans.filter((l) => l.clientId === action.id).map((l) => l.id);
+      const loanIds = state.loans.filter((l) => l.clientId === action.id || (l as any).clientid === action.id).map((l) => l.id);
       return {
         ...state,
         clients: state.clients.filter((c) => c.id !== action.id),
-        loans: state.loans.filter((l) => l.clientId !== action.id),
+        loans: state.loans.filter((l) => l.clientId !== action.id && (l as any).clientid !== action.id),
         repayments: state.repayments.filter((r) => !loanIds.includes(r.loanId)),
       };
     }
@@ -166,21 +166,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           createdAt: c.createdAt ?? c.createdat ?? nowISO(),
         }));
 
-        const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
-          id: l.id,
-          clientId: l.clientid ?? l.clientId ?? l.client_id ?? '',
-          amount: Number(l.amount ?? l.principal ?? 0),
-          principal: Number(l.principal ?? l.amount ?? 0),
-          interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
-          upfrontDeduction: Number(l.upfrontDeduction ?? l.upfront_deduction ?? 0),
-          startDate: l.startDate ?? l.startdate ?? nowISO(),
-          dueDate: l.dueDate ?? l.duedate ?? '',
-          tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
-          interestType: l.loanType ?? l.loantype ?? l.interestType ?? l.interest_type ?? 'interest_only',
-          purpose: l.purpose ?? l.notes ?? 'Personal',
-          notes: l.notes ?? '',
-          createdAt: l.createdAt ?? l.createdat ?? nowISO(),
-        }));
+        const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => {
+          const resolvedClientId = l.clientid ?? l.clientId ?? l.client_id ?? '';
+          return {
+            id: l.id,
+            clientId: resolvedClientId,
+            amount: Number(l.amount ?? l.principal ?? 0),
+            principal: Number(l.principal ?? l.amount ?? 0),
+            interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
+            upfrontDeduction: Number(l.upfrontDeduction ?? l.upfront_deduction ?? 0),
+            startDate: l.startDate ?? l.startdate ?? nowISO(),
+            dueDate: l.dueDate ?? l.duedate ?? '',
+            tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
+            interestType: l.loanType ?? l.loantype ?? l.interestType ?? l.interest_type ?? 'interest_only',
+            purpose: l.purpose ?? l.notes ?? 'Personal',
+            notes: l.notes ?? '',
+            createdAt: l.createdAt ?? l.createdat ?? nowISO(),
+          };
+        });
 
         const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
           id: r.id,
@@ -191,12 +194,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           notes: r.notes ?? '',
         }));
 
+        // Merge cloud data safely while preserving items created locally if cloud is empty or missing them
         dispatch({
           type: 'SET_DATA',
           data: {
-            clients: cleanClients,
-            loans: cleanLoans,
-            repayments: cleanRepayments,
+            clients: cleanClients.length > 0 ? cleanClients : data.clients,
+            loans: cleanLoans.length > 0 ? cleanLoans : data.loans,
+            repayments: cleanRepayments.length > 0 ? cleanRepayments : data.repayments,
             settings: data.settings,
           },
         });
