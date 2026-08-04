@@ -18,17 +18,20 @@ export interface Client {
 export interface Loan {
   id: string;
   clientId: string;
+  loanNumber?: string; // Customizable Loan Identifier (e.g. "1", "LN-101")
   principal: number;
   interestRate: number; // annual percent
   startDate: string; // ISO
   tenureMonths: number; // acts as tenure length (weeks or months depending on interestType)
   interestType: InterestType;
-  purpose: string;
+  purpose?: string;
+  notes?: string;
   createdAt: string;
   // Optional fields for Upfront Deduction / Weekly Finance
   upfrontDeductionType?: 'percentage' | 'fixed';
   upfrontDeductionValue?: number;
   disbursedAmount?: number;
+  lumpsumUnit?: string;
 }
 
 export interface Repayment {
