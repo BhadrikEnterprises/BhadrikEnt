@@ -138,16 +138,15 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
-  // Backup state to local storage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* ignore storage quota limits */
+      /* ignore */
     }
   }, [data]);
 
-  // Initial cloud synchronization on app boot
+  // Initial cloud fetch with automatic formatting fix
   useEffect(() => {
     async function fetchFromCloud() {
       try {
@@ -159,12 +158,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ]);
 
         if (clientsRes.data || loansRes.data || repaymentsRes.data) {
+          // Map raw SQL rows into safe React TypeScript objects
+          const cleanClients: Client[] = (clientsRes.data || []).map((c: any) => ({
+            id: c.id,
+            name: c.name ?? 'Unknown',
+            phone: c.phone ?? '',
+            email: c.email ?? '',
+            address: c.address ?? '',
+            notes: c.notes ?? '',
+            createdAt: c.createdAt ?? c.createdat ?? nowISO(),
+          }));
+
+          const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
+            id: l.id,
+            clientId: l.clientId ?? l.clientid ?? '',
+            amount: Number(l.amount ?? l.principal ?? 0),
+            principal: Number(l.principal ?? l.amount ?? 0),
+            interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
+            startDate: l.startDate ?? l.startdate ?? nowISO(),
+            dueDate: l.dueDate ?? l.duedate ?? '',
+            tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
+            interestType: l.interestType ?? l.loantype ?? l.interest_type ?? 'interest_only',
+            purpose: l.purpose ?? l.notes ?? 'Personal',
+            notes: l.notes ?? '',
+            createdAt: l.createdAt ?? l.createdat ?? nowISO(),
+          }));
+
+          const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
+            id: r.id,
+            loanId: r.loanId ?? r.loanid ?? '',
+            amount: Number(r.amount ?? 0),
+            date: r.date ?? nowISO(),
+            method: r.method ?? 'Cash',
+            notes: r.notes ?? '',
+          }));
+
           dispatch({
             type: 'SET_DATA',
             data: {
-              clients: clientsRes.data || [],
-              loans: loansRes.data || [],
-              repayments: repaymentsRes.data || [],
+              clients: cleanClients,
+              loans: cleanLoans,
+              repayments: cleanRepayments,
               settings: data.settings,
             },
           });
