@@ -79,3 +79,27 @@ export function relativeDays(iso: string): string {
   if (days > 0) return `in ${days} days`;
   return `${Math.abs(days)} days ago`;
 }
+
+export function formatLoanType(type?: string): string {
+  if (!type) return 'Standard';
+  switch (type.toLowerCase()) {
+    case 'interest_only':
+    case 'int-only':
+      return 'Int-only';
+    case 'weekly_upfront_deduction':
+    case 'upfront_deduction':
+    case 'upfront':
+      return 'Upfront Wkly';
+    case 'weekly_interest_only':
+      return 'Weekly Int';
+    case 'weekly_reducing':
+    case 'weekly':
+      return 'Weekly';
+    case 'emi':
+      return 'EMI';
+    case 'lumpsum':
+      return 'Lumpsum';
+    default:
+      return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+}
