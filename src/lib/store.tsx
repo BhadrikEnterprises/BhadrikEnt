@@ -155,52 +155,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supabase.from('repayments').select('*'),
       ]);
 
-      if (clientsRes.data || loansRes.data || repaymentsRes.data) {
-        const cleanClients: Client[] = (clientsRes.data || []).map((c: any) => ({
-          id: c.id,
-          name: c.name ?? 'Unknown',
-          phone: c.phone ?? '',
-          email: c.email ?? '',
-          address: c.address ?? '',
-          notes: c.notes ?? '',
-          createdAt: c.createdAt ?? c.createdat ?? nowISO(),
-        }));
+      const cloudClients: Client[] = (clientsRes.data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name ?? 'Unknown',
+        phone: c.phone ?? '',
+        email: c.email ?? '',
+        address: c.address ?? '',
+        notes: c.notes ?? '',
+        createdAt: c.createdAt ?? c.createdat ?? nowISO(),
+      }));
 
-        const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => {
-          const resolvedClientId = l.clientid ?? l.clientId ?? l.client_id ?? '';
-          return {
-            id: l.id,
-            clientId: resolvedClientId,
-            amount: Number(l.amount ?? l.principal ?? 0),
-            principal: Number(l.principal ?? l.amount ?? 0),
-            interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
-            upfrontDeduction: Number(l.upfrontDeduction ?? l.upfront_deduction ?? 0),
-            startDate: l.startDate ?? l.startdate ?? nowISO(),
-            dueDate: l.dueDate ?? l.duedate ?? '',
-            tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
-            interestType: l.loanType ?? l.loantype ?? l.interestType ?? l.interest_type ?? 'interest_only',
-            purpose: l.purpose ?? l.notes ?? 'Personal',
-            notes: l.notes ?? '',
-            createdAt: l.createdAt ?? l.createdat ?? nowISO(),
-          };
-        });
+      const cloudLoans: Loan[] = (loansRes.data || []).map((l: any) => {
+        const resolvedClientId = l.clientid ?? l.clientId ?? l.client_id ?? '';
+        return {
+          id: l.id,
+          clientId: resolvedClientId,
+          amount: Number(l.amount ?? l.principal ?? 0),
+          principal: Number(l.principal ?? l.amount ?? 0),
+          interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
+          upfrontDeduction: Number(l.upfrontDeduction ?? l.upfront_deduction ?? 0),
+          startDate: l.startDate ?? l.startdate ?? nowISO(),
+          dueDate: l.dueDate ?? l.duedate ?? '',
+          tenureMonths: Number(l.tenureMonths ?? l.tenure ?? 0),
+          interestType: l.loanType ?? l.loantype ?? l.interestType ?? l.interest_type ?? 'interest_only',
+          purpose: l.purpose ?? l.notes ?? 'Personal',
+          notes: l.notes ?? '',
+          createdAt: l.createdAt ?? l.createdat ?? nowISO(),
+        };
+      });
 
-        const cleanRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
-          id: r.id,
-          loanId: r.loanid ?? r.loanId ?? '',
-          amount: Number(r.amount ?? 0),
-          date: r.date ?? nowISO(),
-          method: r.method ?? 'Cash',
-          notes: r.notes ?? '',
-        }));
+      const cloudRepayments: Repayment[] = (repaymentsRes.data || []).map((r: any) => ({
+        id: r.id,
+        loanId: r.loanid ?? r.loanId ?? '',
+        amount: Number(r.amount ?? 0),
+        date: r.date ?? nowISO(),
+        method: r.method ?? 'Cash',
+        notes: r.notes ?? '',
+      }));
 
-        // Merge cloud data safely while preserving items created locally if cloud is empty or missing them
+      // Intelligent Merge: Combine local and cloud items uniquely by ID so local additions aren't wiped out if cloud sync lags or returns empty
+      const mergedClients = Array.from(
+        new Map([...cloudClients, ...data.clients].map((item) => [item.id, item])).values()
+      );
+      const mergedLoans = Array.from(
+        new Map([...cloudLoans, ...data.loans].map((item) => [item.id, item])).values()
+      );
+      const mergedRepayments = Array.from(
+        new Map([...cloudRepayments, ...data.repayments].map((item) => [item.id, item])).values()
+      );
+
+      if (cloudClients.length > 0 || cloudLoans.length > 0 || cloudRepayments.length > 0) {
         dispatch({
           type: 'SET_DATA',
           data: {
-            clients: cleanClients.length > 0 ? cleanClients : data.clients,
-            loans: cleanLoans.length > 0 ? cleanLoans : data.loans,
-            repayments: cleanRepayments.length > 0 ? cleanRepayments : data.repayments,
+            clients: mergedClients,
+            loans: mergedLoans,
+            repayments: mergedRepayments,
             settings: data.settings,
           },
         });
@@ -222,7 +232,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_CLIENT', client });
         if (supabase) {
           const { error } = await supabase.from('clients').insert([client]);
-          if (error) console.error('Error saving client:', error);
+          if (error) console.error('Error saving client to cloud:', error.message);
         }
         return client;
       },
@@ -230,14 +240,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'UPDATE_CLIENT', client });
         if (supabase) {
           const { error } = await supabase.from('clients').update(client).eq('id', client.id);
-          if (error) console.error('Error updating client:', error);
+          if (error) console.error('Error updating client:', error.message);
         }
       },
       deleteClient: async (id) => {
         dispatch({ type: 'DELETE_CLIENT', id });
         if (supabase) {
           const { error } = await supabase.from('clients').delete().eq('id', id);
-          if (error) console.error('Error deleting client:', error);
+          if (error) console.error('Error deleting client:', error.message);
         }
       },
       addLoan: async (l: any) => {
@@ -262,7 +272,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           const { error } = await supabase.from('loans').insert([payload]);
           if (error) {
-            console.error('Error saving loan to cloud:', error.message);
+            console.error('CRITICAL Supabase Loan Insert Error:', error.message);
+            alert(`Failed to save loan to cloud database: ${error.message}`);
           }
         }
         return loan;
@@ -283,14 +294,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notes: loan.purpose || loan.notes || '',
           };
           const { error } = await supabase.from('loans').update(payload).eq('id', loan.id);
-          if (error) console.error('Error updating loan:', error);
+          if (error) console.error('Error updating loan:', error.message);
         }
       },
       deleteLoan: async (id) => {
         dispatch({ type: 'DELETE_LOAN', id });
         if (supabase) {
           const { error } = await supabase.from('loans').delete().eq('id', id);
-          if (error) console.error('Error deleting loan:', error);
+          if (error) console.error('Error deleting loan:', error.message);
         }
       },
       addRepayment: async (r) => {
@@ -306,7 +317,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notes: repayment.notes,
           };
           const { error } = await supabase.from('repayments').insert([payload]);
-          if (error) console.error('Error saving repayment:', error);
+          if (error) console.error('Error saving repayment:', error.message);
         }
       },
       updateRepayment: async (repayment) => {
@@ -321,14 +332,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             notes: repayment.notes,
           };
           const { error } = await supabase.from('repayments').update(payload).eq('id', repayment.id);
-          if (error) console.error('Error updating repayment:', error);
+          if (error) console.error('Error updating repayment:', error.message);
         }
       },
       deleteRepayment: async (id) => {
         dispatch({ type: 'DELETE_REPAYMENT', id });
         if (supabase) {
           const { error } = await supabase.from('repayments').delete().eq('id', id);
-          if (error) console.error('Error deleting repayment:', error);
+          if (error) console.error('Error deleting repayment:', error.message);
         }
       },
       importData: (d, merge = false) => dispatch({ type: merge ? 'MERGE' : 'IMPORT', data: d }),
