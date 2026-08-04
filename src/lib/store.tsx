@@ -170,7 +170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.cilentid ?? l.clientid ?? l.clientId ?? '',
+          clientId: l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -262,15 +262,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            cilentid: loan.clientId, // matches database column spelling typo
+            clientid: loan.clientId, // exact match from your DB schema screenshot
             amount: Number(loan.amount || loan.principal || 0),
-            interestrate: Number(loan.interestRate || 0),
-            startdate: loan.startDate || nowISO(),
-            duedate: loan.dueDate || null,
-            loantype: loan.interestType || 'interest_only',
+            interestRate: Number(loan.interestRate || 0),
+            startDate: loan.startDate || nowISO(),
+            dueDate: loan.dueDate || null,
+            loanType: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
-            createdat: loan.createdAt,
+            createdAt: loan.createdAt, // exact camelCase match from your DB schema screenshot
           };
 
           const { error } = await supabase.from('loans').insert([payload]);
@@ -286,12 +286,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            cilentid: loan.clientId,
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
-            interestrate: Number(loan.interestRate || 0),
-            startdate: loan.startDate || nowISO(),
-            duedate: loan.dueDate || null,
-            loantype: loan.interestType || 'interest_only',
+            interestRate: Number(loan.interestRate || 0),
+            startDate: loan.startDate || nowISO(),
+            dueDate: loan.dueDate || null,
+            loanType: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
           };
