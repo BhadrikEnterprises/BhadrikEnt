@@ -1,15 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Search, Pencil, Trash2, Landmark, Mail, Phone, Users } from 'lucide-react';
+import { UserPlus, Search, Pencil, Trash2, Landmark, Mail, Phone, Users, Info, Calendar } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
-import { computeClientStats } from '../lib/finance';
-import { formatCurrency } from '../lib/format';
+import { computeClientStats, computeLoanStats } from '../lib/finance';
+import { formatCurrency, formatDate, formatLoanType } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ClientForm } from '../components/forms';
 import { Button, Card, Input, Avatar, Badge, EmptyState } from '../components/ui';
-import type { Client } from '../lib/types';
+import type { Client, Loan } from '../lib/types';
+import { startOfWeek, endOfWeek, addWeeks, startOfMonth, addMonths, parseISO } from 'date-fns';
+
+interface BreakdownItem {
+  loan: Loan;
+  installment: number;
+  dueDate: string;
+  amount: number;
+}
 
 export function Clients() {
   const { data, addClient, updateClient, deleteClient } = useStore();
@@ -23,6 +31,13 @@ export function Clients() {
 
   const [weeklyPeriod, setWeeklyPeriod] = useState<'this_week' | 'next_week'>('this_week');
   const [monthlyPeriod, setMonthlyPeriod] = useState<'this_month' | 'next_month'>('this_month');
+
+  // Breakdown Modal state
+  const [breakdownData, setBreakdownData] = useState<{
+    clientName: string;
+    title: string;
+    items: BreakdownItem[];
+  } | null>(null);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,6 +65,78 @@ export function Clients() {
       notify('Client added');
     }
     setModalOpen(false);
+  };
+
+  // Helper to open the dues breakdown modal
+  const showDueBreakdown = (
+    client: Client,
+    periodType: 'weekly' | 'monthly',
+    periodKey: 'this_week' | 'next_week' | 'this_month' | 'next_month'
+  ) => {
+    const today = new Date();
+    const loans = data.loans.filter((l) => l.clientId === client.id);
+    const items: BreakdownItem[] = [];
+
+    const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+    const thisWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
+    const nextWeekStart = addWeeks(thisWeekStart, 1);
+    const nextWeekEnd = addWeeks(thisWeekEnd, 1);
+
+    const thisMonthStart = startOfMonth(today);
+    const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+    const nextMonthStart = startOfMonth(addMonths(today, 1));
+    const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0, 23, 59, 59);
+
+    let startRange: Date, endRange: Date, label: string;
+
+    if (periodKey === 'this_week') {
+      startRange = thisWeekStart;
+      endRange = thisWeekEnd;
+      label = 'Due This Week';
+    } else if (periodKey === 'next_week') {
+      startRange = nextWeekStart;
+      endRange = nextWeekEnd;
+      label = 'Due Next Week';
+    } else if (periodKey === 'this_month') {
+      startRange = thisMonthStart;
+      endRange = thisMonthEnd;
+      label = 'Due This Month';
+    } else {
+      startRange = nextMonthStart;
+      endRange = nextMonthEnd;
+      label = 'Due Next Month';
+    }
+
+    for (const l of loans) {
+      const st = computeLoanStats(l, data.repayments, today);
+      if (st.isClosed) continue;
+
+      const loanPayments = data.repayments
+        .filter((r) => r.loanId === l.id)
+        .reduce((s, r) => s + r.amount, 0);
+
+      let cum = 0;
+      for (const row of st.schedule) {
+        cum += row.amount;
+        if (loanPayments >= cum) continue; // paid
+
+        const d = parseISO(row.dueDate);
+        if (d >= startRange && d <= endRange) {
+          items.push({
+            loan: l,
+            installment: row.installment,
+            dueDate: row.dueDate,
+            amount: row.amount,
+          });
+        }
+      }
+    }
+
+    setBreakdownData({
+      clientName: client.name,
+      title: label,
+      items,
+    });
   };
 
   return (
@@ -155,10 +242,32 @@ export function Clients() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-right font-medium text-amber-600 tabular">
-                        {formatCurrency(weeklyDueVal, currency, { compact: true })}
+                        {weeklyDueVal > 0 ? (
+                          <button
+                            onClick={() => showDueBreakdown(client, 'weekly', weeklyPeriod)}
+                            className="group/btn inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-amber-50 hover:underline"
+                            title="Click for breakdown"
+                          >
+                            {formatCurrency(weeklyDueVal, currency, { compact: true })}
+                            <Info size={12} className="opacity-0 transition group-hover/btn:opacity-100" />
+                          </button>
+                        ) : (
+                          formatCurrency(0, currency, { compact: true })
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-right font-medium text-blue-600 tabular">
-                        {formatCurrency(monthlyDueVal, currency, { compact: true })}
+                        {monthlyDueVal > 0 ? (
+                          <button
+                            onClick={() => showDueBreakdown(client, 'monthly', monthlyPeriod)}
+                            className="group/btn inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-blue-50 hover:underline"
+                            title="Click for breakdown"
+                          >
+                            {formatCurrency(monthlyDueVal, currency, { compact: true })}
+                            <Info size={12} className="opacity-0 transition group-hover/btn:opacity-100" />
+                          </button>
+                        ) : (
+                          formatCurrency(0, currency, { compact: true })
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-right font-medium text-slate-700 tabular">{formatCurrency(stats.totalLent, currency, { compact: true })}</td>
                       <td className="px-5 py-3.5 text-right">
@@ -186,6 +295,77 @@ export function Clients() {
           </div>
         )}
       </Card>
+
+      {/* Dues Breakdown Modal */}
+      <Modal
+        open={!!breakdownData}
+        onClose={() => setBreakdownData(null)}
+        title={`${breakdownData?.clientName} — ${breakdownData?.title}`}
+        subtitle="Individual installment items contributing to this total"
+      >
+        <div className="space-y-4 pt-1">
+          {breakdownData?.items.length === 0 ? (
+            <p className="text-center text-sm text-slate-500 py-4">No upcoming installments in this timeframe.</p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left">Loan Type</th>
+                    <th className="px-4 py-2.5 text-center">Installment</th>
+                    <th className="px-4 py-2.5 text-left">Due Date</th>
+                    <th className="px-4 py-2.5 text-right">Amount Due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {breakdownData?.items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-slate-800">
+                          {formatCurrency(item.loan.principal, currency, { compact: true })}
+                        </span>
+                        <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {formatLoanType(item.loan.interestType)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs font-medium text-slate-500">
+                        #{item.installment}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar size={13} className="text-slate-400" />
+                          {formatDate(item.dueDate, 'dd MMM yyyy')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular">
+                        {formatCurrency(item.amount, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-800">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-2.5 text-right text-xs uppercase text-slate-500">
+                      Total Due:
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-indigo-700 tabular">
+                      {formatCurrency(
+                        breakdownData?.items.reduce((s, i) => s + i.amount, 0) ?? 0,
+                        currency
+                      )}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" onClick={() => setBreakdownData(null)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={modalOpen}
