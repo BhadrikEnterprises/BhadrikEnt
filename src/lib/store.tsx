@@ -256,7 +256,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_LOAN', loan });
 
         if (supabase) {
-          // Send payload without clientid to avoid schema cache validation crash, relying on local state first
           const payload: any = {
             id: loan.id,
             amount: Number(loan.amount || loan.principal || 0),
