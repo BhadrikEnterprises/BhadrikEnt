@@ -138,7 +138,6 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
-  // Local storage backup
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -147,7 +146,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [data]);
 
-  // Main sync function to pull accurate data from Supabase
   const syncFromCloud = async () => {
     try {
       if (!supabase) return;
@@ -170,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.clientid ?? l.clientId ?? '',
+          clientId: l.cilentid ?? l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -208,12 +206,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initial load
   useEffect(() => {
     syncFromCloud();
   }, []);
 
-  // Refresh automatically when opening/focusing app tab on mobile
   useEffect(() => {
     const handleFocus = () => syncFromCloud();
     window.addEventListener('focus', handleFocus);
@@ -262,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId, // exact match from your DB schema screenshot
+            cilentid: loan.clientId, // matches the database column typo 'cilentid'
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -270,7 +266,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             loanType: loan.interestType || 'interest_only',
             tenure: Number(loan.tenureMonths || 0),
             notes: loan.purpose || loan.notes || '',
-            createdAt: loan.createdAt, // exact camelCase match from your DB schema screenshot
+            createdAt: loan.createdAt,
           };
 
           const { error } = await supabase.from('loans').insert([payload]);
@@ -286,7 +282,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            clientid: loan.clientId,
+            cilentid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
