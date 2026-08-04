@@ -10,8 +10,6 @@ import {
   subMonths,
   startOfWeek,
   endOfWeek,
-  startOfNextWeek,
-  endOfNextWeek,
 } from 'date-fns';
 import type { AppData, Loan, Repayment } from './types';
 
@@ -33,7 +31,7 @@ export function generateSchedule(loan: Loan): ScheduleRow[] {
   const rows: ScheduleRow[] = [];
   if (n <= 0) return rows;
 
-  // 1. Weekly Upfront Deduction (e.g. 1,00,000 principal, 80k issued, 1,00,000 repaid over n weeks)
+  // 1. Weekly Upfront Deduction
   if (loan.interestType === 'weekly_upfront_deduction') {
     const weeklyEmi = loan.principal / n;
     let balance = loan.principal;
@@ -378,8 +376,8 @@ export function computeClientStats(
 
   const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
   const thisWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
-  const nextWeekStart = startOfNextWeek(today, { weekStartsOn: 1 });
-  const nextWeekEnd = endOfNextWeek(today, { weekStartsOn: 1 });
+  const nextWeekStart = addWeeks(thisWeekStart, 1);
+  const nextWeekEnd = addWeeks(thisWeekEnd, 1);
 
   const thisMonthStart = startOfMonth(today);
   const thisMonthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
