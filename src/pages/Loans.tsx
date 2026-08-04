@@ -19,9 +19,114 @@ import { formatCurrency, formatDate, relativeDays, formatLoanType } from '../lib
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LoanForm, RepaymentForm } from '../components/forms';
-import { ScheduleModal } from '../components';
 import { Button, Card, Input, Badge, EmptyState } from '../components/ui';
 import type { Loan } from '../lib/types';
+
+// Inline ScheduleModal component to prevent missing export / case-sensitivity build errors on Vercel
+function ScheduleModal({
+  open,
+  loan,
+  onClose,
+  onRecordRepayment,
+}: {
+  open: boolean;
+  loan: Loan;
+  onClose: () => void;
+  onRecordRepayment: () => void;
+}) {
+  const { data } = useStore();
+  const currency = data.settings.currency;
+  const stats = useMemo(() => computeLoanStats(loan, data.repayments), [loan, data.repayments]);
+
+  // Total amount collected so far for this loan
+  const totalPaid = useMemo(() => {
+    return data.repayments
+      .filter((r) => r.loanId === loan.id)
+      .reduce((sum, r) => sum + r.amount, 0);
+  }, [data.repayments, loan.id]);
+
+  let runningPaid = totalPaid;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Loan Repayment Schedule" subtitle={`Principal: ${formatCurrency(loan.principal, currency)}`}>
+      <div className="space-y-4 pt-1">
+        {/* Summary Info */}
+        <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center text-xs border border-slate-100">
+          <div>
+            <p className="text-slate-400 uppercase font-medium">Interest Rate</p>
+            <p className="font-semibold text-slate-800">{loan.interestRate}%</p>
+          </div>
+          <div>
+            <p className="text-slate-400 uppercase font-medium">Tenure</p>
+            <p className="font-semibold text-slate-800">
+              {loan.tenureMonths} {loan.interestType?.includes('weekly') ? 'Weeks' : 'Months'}
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-400 uppercase font-medium">Type</p>
+            <p className="font-semibold text-slate-800">{formatLoanType(loan.interestType)}</p>
+          </div>
+        </div>
+
+        {/* Schedule Table */}
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-slate-100 text-xs font-semibold uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-center">#</th>
+                <th className="px-3 py-2 text-left">Due Date</th>
+                <th className="px-3 py-2 text-right">Amount</th>
+                <th className="px-3 py-2 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {stats.schedule.map((row) => {
+                const isPaid = runningPaid >= row.amount;
+                if (runningPaid > 0) runningPaid -= row.amount;
+
+                return (
+                  <tr key={row.installment} className="hover:bg-slate-50/60">
+                    <td className="px-3 py-2 text-center text-xs font-medium text-slate-400">
+                      {row.installment}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700">
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <Calendar size={12} className="text-slate-400" />
+                        {formatDate(row.dueDate, 'dd MMM yyyy')}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium text-slate-900 tabular">
+                      {formatCurrency(row.amount, currency)}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {isPaid ? (
+                        <Badge tone="emerald">Paid</Badge>
+                      ) : (
+                        <Badge tone="amber">Pending</Badge>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2">
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+          {!stats.isClosed && (
+            <Button onClick={onRecordRepayment}>
+              Record Repayment
+            </Button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 export function Loans() {
   const { data, addLoan, updateLoan, deleteLoan, addRepayment } = useStore();
