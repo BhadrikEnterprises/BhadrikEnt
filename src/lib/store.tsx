@@ -210,21 +210,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     syncFromCloud();
   }, []);
 
-  useEffect(() => {
-    const handleFocus = () => syncFromCloud();
-    window.addEventListener('focus', handleFocus);
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') syncFromCloud();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [data.settings]);
-
   const value = useMemo<StoreContextValue>(
     () => ({
       data,
@@ -252,7 +237,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
       addLoan: async (l: any) => {
-        // Fallback catch to resolve client ID from any potential form naming property
         const resolvedClientId = l.clientId || l.clientid || l.client_id || l.borrowerId || '';
         const loan: Loan = { ...l, clientId: resolvedClientId, id: uid(), createdAt: nowISO() };
         
@@ -275,8 +259,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const { error } = await supabase.from('loans').insert([payload]);
           if (error) {
             console.error('Error saving loan to cloud:', error.message);
-            // We log the error to console instead of a harsh alert popup 
-            // so your local state and UI remain fully functional without interruption.
           }
         }
         return loan;
