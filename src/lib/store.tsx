@@ -111,7 +111,7 @@ function init(): AppData {
       }
     }
   } catch {
-    /* ignore fallback */
+    /* fallback to seed */
   }
   return seedData();
 }
@@ -138,16 +138,16 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, dispatch] = useReducer(reducer, undefined, init);
 
-  // Backup to localStorage
+  // Backup state to local storage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* ignore */
+      /* ignore storage quota limits */
     }
   }, [data]);
 
-  // Initial cloud fetch on app launch
+  // Initial cloud synchronization on app boot
   useEffect(() => {
     async function fetchFromCloud() {
       try {
