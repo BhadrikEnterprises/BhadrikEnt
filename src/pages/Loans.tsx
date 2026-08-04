@@ -1,146 +1,173 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Search, Pencil, Trash2, Eye, HandCoins, Landmark, Filter } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  Eye,
+  Landmark,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+  TrendingUp,
+} from 'lucide-react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
-import { computeLoanStats } from '../lib/finance';
-import { formatCurrency, formatDate, relativeDays } from '../lib/format';
+import { computeLoanStats, LoanStatus } from '../lib/finance';
+import { formatCurrency, formatDate, relativeDays, formatLoanType } from '../lib/format';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { LoanForm } from '../components/forms';
-import { LoanDetailModal } from '../components/LoanDetailModal';
-import { Button, Card, Input, Select, Avatar, ProgressBar, StatusPill, Badge, EmptyState, cn } from '../components/ui';
-import type { Loan, InterestType } from '../lib/types';
-
-const TYPE_LABEL: Record<InterestType, string> = {
-  emi: 'EMI',
-  interest_only: 'Int-only',
-  lumpsum: 'Lumpsum',
-};
-
-type StatusFilter = 'all' | 'active' | 'overdue' | 'closed';
+import { LoanForm, RepaymentForm } from '../components/forms';
+import { ScheduleModal } from '../components/ScheduleModal';
+import { Button, Card, Input, Badge, EmptyState } from '../components/ui';
+import type { Loan } from '../lib/types';
 
 export function Loans() {
-  const { data, addLoan, updateLoan, deleteLoan } = useStore();
+  const { data, addLoan, updateLoan, deleteLoan, addRepayment } = useStore();
   const { notify } = useToast();
-  const currency = data.settings.currency;
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+
+  const clientFilter = params.get('client') ?? '';
+  const statusFilter = (params.get('status') as LoanStatus | 'all') || 'all';
+
+  const currency = data.settings.currency;
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Loan | null>(null);
-  const [detailLoan, setDetailLoan] = useState<Loan | null>(null);
-  const [toDelete, setToDelete] = useState<Loan | null>(null);
+  const [loanModalOpen, setLoanModalOpen] = useState(false);
+  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
+  const [deletingLoan, setDeletingLoan] = useState<Loan | null>(null);
+  const [scheduleLoan, setScheduleLoan] = useState<Loan | null>(null);
+  const [repaymentLoan, setRepaymentLoan] = useState<Loan | null>(null);
 
-  const clientFilter = params.get('client') ?? 'all';
-
-  const setClientFilter = (v: string) => {
-    const next = new URLSearchParams(params);
-    if (v === 'all') next.delete('client');
-    else next.set('client', v);
-    setParams(next, { replace: true });
-  };
+  const clientMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of data.clients) map.set(c.id, c.name);
+    return map;
+  }, [data.clients]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return data.loans
-      .map((l) => {
-        const stats = computeLoanStats(l, data.repayments);
-        const client = data.clients.find((c) => c.id === l.clientId);
-        return { loan: l, client, stats };
+      .map((loan) => {
+        const stats = computeLoanStats(loan, data.repayments);
+        const clientName = clientMap.get(loan.clientId) ?? 'Unknown';
+        return { loan, stats, clientName };
       })
-      .filter((x) => {
-        if (clientFilter !== 'all' && x.loan.clientId !== clientFilter) return false;
-        if (statusFilter !== 'all' && x.stats.status !== statusFilter) return false;
-        if (q) {
-          const hay = `${x.client?.name ?? ''} ${x.loan.purpose}`.toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
+      .filter(({ loan, stats, clientName }) => {
+        if (clientFilter && loan.clientId !== clientFilter) return false;
+        if (statusFilter !== 'all' && stats.status !== statusFilter) return false;
+        if (!q) return true;
+        return (
+          clientName.toLowerCase().includes(q) ||
+          (loan.notes ?? '').toLowerCase().includes(q) ||
+          loan.principal.toString().includes(q)
+        );
       })
-      .sort((a, b) => b.stats.outstanding - a.stats.outstanding);
-  }, [data, query, statusFilter, clientFilter]);
+      .sort((a, b) => new Date(b.loan.startDate).getTime() - new Date(a.loan.startDate).getTime());
+  }, [data, clientFilter, statusFilter, query, clientMap]);
 
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, x) => {
-        acc.outstanding += x.stats.outstanding;
-        acc.overdue += x.stats.arrears;
-        if (x.stats.isOverdue) acc.overdueCount++;
-        if (x.stats.status === 'active') acc.activeCount++;
-        return acc;
-      },
-      { outstanding: 0, overdue: 0, overdueCount: 0, activeCount: 0 }
-    );
-  }, [rows]);
+  const totalOutstanding = useMemo(
+    () => rows.reduce((acc, r) => acc + r.stats.outstanding, 0),
+    [rows]
+  );
 
   const openAdd = () => {
-    setEditing(null);
-    setModalOpen(true);
-  };
-  const openEdit = (l: Loan) => {
-    setEditing(l);
-    setDetailLoan(null);
-    setModalOpen(true);
+    setEditingLoan(null);
+    setLoanModalOpen(true);
   };
 
-  const handleSubmit = (v: Omit<Loan, 'id' | 'createdAt'>) => {
-    if (editing) {
-      updateLoan({ ...editing, ...v });
+  const openEdit = (l: Loan) => {
+    setEditingLoan(l);
+    setLoanModalOpen(true);
+  };
+
+  const handleLoanSubmit = (v: Omit<Loan, 'id' | 'createdAt'>) => {
+    if (editingLoan) {
+      updateLoan({ ...editingLoan, ...v });
       notify('Loan updated');
     } else {
       addLoan(v);
       notify('Loan created');
     }
-    setModalOpen(false);
+    setLoanModalOpen(false);
   };
 
   return (
     <div className="space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-      {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:max-w-xs">
+      {/* Header Controls */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search borrower or purpose..." className="pl-9" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search loans..."
+              className="pl-9"
+            />
           </div>
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="sm:w-40">
-            <option value="all">All status</option>
-            <option value="active">On track</option>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'all') params.delete('status');
+              else params.set('status', val);
+              setParams(params);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
             <option value="overdue">Overdue</option>
             <option value="closed">Closed</option>
-          </Select>
-          <Select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="sm:w-44">
-            <option value="all">All clients</option>
-            {data.clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
+          </select>
+
+          {clientFilter && (
+            <button
+              onClick={() => {
+                params.delete('client');
+                setParams(params);
+              }}
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100"
+            >
+              Client: {clientMap.get(clientFilter)} ✕
+            </button>
+          )}
         </div>
+
         <Button onClick={openAdd}>
-          <Plus size={16} /> Add Loan
+          <Plus size={16} /> New Loan
         </Button>
       </div>
 
-      {/* Summary chips */}
-      <div className="flex flex-wrap gap-2.5">
-        <Chip icon={<Landmark size={13} />} label={`${rows.length} loans`} />
-        <Chip icon={<HandCoins size={13} />} label={`${formatCurrency(totals.outstanding, currency, { compact: true })} outstanding`} tone="amber" />
-        {totals.overdueCount > 0 && <Chip icon={<Filter size={13} />} label={`${totals.overdueCount} overdue · ${formatCurrency(totals.overdue, currency, { compact: true })}`} tone="rose" />}
+      {/* Summary Bar */}
+      <div className="flex items-center gap-3 text-sm text-slate-600">
+        <span className="flex items-center gap-1 font-medium">
+          <Landmark size={16} className="text-slate-400" /> {rows.length} loans
+        </span>
+        <span className="text-slate-300">•</span>
+        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200/60">
+          {formatCurrency(totalOutstanding, currency, { compact: true })} outstanding
+        </span>
       </div>
 
+      {/* Main Table */}
       <Card className="overflow-hidden">
         {rows.length === 0 ? (
           <EmptyState
             icon={Landmark}
-            title={data.loans.length === 0 ? 'No loans yet' : 'No loans match your filters'}
-            description={data.loans.length === 0 ? 'Create your first loan to start tracking repayments.' : 'Try adjusting the search or filters.'}
+            title={query || clientFilter ? 'No matching loans' : 'No loans issued yet'}
+            description={
+              query || clientFilter
+                ? 'Try adjusting your filters or search terms.'
+                : 'Create your first loan agreement to start tracking principal and interest schedules.'
+            }
             action={
-              data.loans.length === 0 && (
+              !query && !clientFilter && (
                 <Button onClick={openAdd}>
-                  <Plus size={16} /> Add Loan
+                  <Plus size={16} /> Add First Loan
                 </Button>
               )
             }
@@ -152,68 +179,99 @@ export function Loans() {
                 <tr>
                   <th className="px-5 py-3 text-left font-semibold">Borrower / Purpose</th>
                   <th className="px-5 py-3 text-right font-semibold">Principal</th>
-                  <th className="hidden px-5 py-3 text-center font-semibold md:table-cell">Type</th>
+                  <th className="px-5 py-3 text-center font-semibold">Type</th>
                   <th className="px-5 py-3 text-left font-semibold">Progress</th>
                   <th className="px-5 py-3 text-right font-semibold">Outstanding</th>
-                  <th className="hidden px-5 py-3 text-center font-semibold sm:table-cell">Next Due</th>
+                  <th className="px-5 py-3 text-left font-semibold">Next Due</th>
                   <th className="px-5 py-3 text-center font-semibold">Status</th>
                   <th className="px-5 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map(({ loan, client, stats }) => (
-                  <tr
-                    key={loan.id}
-                    onClick={() => setDetailLoan(loan)}
-                    className="group cursor-pointer transition hover:bg-slate-50/70"
-                  >
+                {rows.map(({ loan, stats, clientName }) => (
+                  <tr key={loan.id} className="group transition hover:bg-slate-50/70">
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        {client && <Avatar name={client.name} className="h-9 w-9" />}
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-800">{client?.name ?? 'Unknown'}</p>
-                          <p className="truncate text-xs text-slate-400">{loan.purpose || 'Loan'} · {loan.interestRate}% · {loan.tenureMonths}mo</p>
+                      <div>
+                        <button
+                          onClick={() => navigate(`/clients?id=${loan.clientId}`)}
+                          className="font-semibold text-slate-900 transition hover:text-indigo-600"
+                        >
+                          {clientName}
+                        </button>
+                        <p className="text-xs text-slate-400">
+                          {loan.notes ? `${loan.notes} · ` : ''}
+                          {loan.interestRate}% · {loan.tenureMonths}
+                          {loan.interestType?.includes('weekly') ? ' wks' : loan.lumpsumUnit ? ` ${loan.lumpsumUnit}` : ' mo'}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-medium text-slate-800 tabular">
+                      {formatCurrency(loan.principal, currency, { compact: true })}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <span className="inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                        {formatLoanType(loan.interestType)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="w-32 space-y-1">
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>{stats.paidInstallments}/{stats.totalInstallments}</span>
+                          <span>{Math.round(stats.progress)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full transition-all ${
+                              stats.isClosed ? 'bg-emerald-500' : stats.isOverdue ? 'bg-rose-500' : 'bg-indigo-600'
+                            }`}
+                            style={{ width: `${stats.progress}%` }}
+                          />
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-right font-medium text-slate-700 tabular">{formatCurrency(loan.principal, currency, { compact: true })}</td>
-                    <td className="hidden px-5 py-3.5 text-center md:table-cell">
-                      <Badge tone="slate">{TYPE_LABEL[loan.interestType]}</Badge>
+                    <td className="px-5 py-3.5 text-right font-semibold text-slate-900 tabular">
+                      {formatCurrency(stats.outstanding, currency, { compact: true })}
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="w-28">
-                        <div className="mb-1 flex justify-between text-xs text-slate-400">
-                          <span className="tabular">{stats.paidInstallments}/{stats.totalInstallments}</span>
-                          <span className="tabular">{stats.progress.toFixed(0)}%</span>
-                        </div>
-                        <ProgressBar value={stats.progress} tone={stats.isOverdue ? 'rose' : 'emerald'} />
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <span className={cn('font-semibold tabular', stats.outstanding === 0 ? 'text-emerald-600' : 'text-slate-900')}>{formatCurrency(stats.outstanding, currency, { compact: true })}</span>
-                    </td>
-                    <td className="hidden px-5 py-3.5 text-center sm:table-cell">
-                      {stats.nextDueDate ? (
-                        <div className="text-xs">
-                          <p className="font-medium text-slate-600">{formatDate(stats.nextDueDate, 'dd MMM')}</p>
-                          <p className="text-slate-400">{relativeDays(stats.nextDueDate)}</p>
+                      {stats.nextDueDate && !stats.isClosed ? (
+                        <div>
+                          <p className="font-medium text-slate-700">{formatDate(stats.nextDueDate, 'dd MMM')}</p>
+                          <p className="text-xs text-slate-400">{relativeDays(stats.nextDueDate)}</p>
                         </div>
                       ) : (
-                        <span className="text-xs text-emerald-600">Settled</span>
+                        <span className="text-xs text-slate-300">—</span>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-center">
-                      <StatusPill status={stats.status} />
+                      {stats.isClosed ? (
+                        <Badge tone="emerald"><CheckCircle2 size={12} /> Closed</Badge>
+                      ) : stats.isOverdue ? (
+                        <Badge tone="rose"><AlertCircle size={12} /> Overdue</Badge>
+                      ) : (
+                        <Badge tone="emerald"><TrendingUp size={12} /> On track</Badge>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => setDetailLoan(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" title="View details">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setScheduleLoan(loan)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          title="View Schedule"
+                        >
                           <Eye size={15} />
                         </button>
-                        <button onClick={() => openEdit(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" title="Edit">
+                        <button
+                          onClick={() => openEdit(loan)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                          title="Edit Loan"
+                        >
                           <Pencil size={15} />
                         </button>
-                        <button onClick={() => setToDelete(loan)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Delete">
+                        <button
+                          onClick={() => setDeletingLoan(loan)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete Loan"
+                        >
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -226,46 +284,64 @@ export function Loans() {
         )}
       </Card>
 
+      {/* Modals */}
       <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        size="lg"
-        title={editing ? 'Edit Loan' : 'Add Loan'}
-        subtitle={editing ? 'Update loan terms' : 'Lend to a borrower'}
+        open={loanModalOpen}
+        onClose={() => setLoanModalOpen(false)}
+        title={editingLoan ? 'Edit Loan' : 'Create New Loan'}
       >
-        <LoanForm initial={editing ?? undefined} onSubmit={handleSubmit} onCancel={() => setModalOpen(false)} submitLabel={editing ? 'Save Changes' : 'Create Loan'} />
+        <LoanForm
+          initial={editingLoan ?? undefined}
+          onSubmit={handleLoanSubmit}
+          onCancel={() => setLoanModalOpen(false)}
+        />
       </Modal>
 
-      <LoanDetailModal loan={detailLoan} open={!!detailLoan} onClose={() => setDetailLoan(null)} onEdit={openEdit} />
+      {scheduleLoan && (
+        <ScheduleModal
+          open={!!scheduleLoan}
+          loan={scheduleLoan}
+          onClose={() => setScheduleLoan(null)}
+          onRecordRepayment={() => {
+            setRepaymentLoan(scheduleLoan);
+            setScheduleLoan(null);
+          }}
+        />
+      )}
+
+      <Modal
+        open={!!repaymentLoan}
+        onClose={() => setRepaymentLoan(null)}
+        title="Record Repayment"
+      >
+        {repaymentLoan && (
+          <RepaymentForm
+            preselectedLoanId={repaymentLoan.id}
+            onSubmit={(v) => {
+              addRepayment(v);
+              notify('Repayment recorded');
+              setRepaymentLoan(null);
+            }}
+            onCancel={() => setRepaymentLoan(null)}
+          />
+        )}
+      </Modal>
 
       <ConfirmDialog
-        open={!!toDelete}
-        title="Delete this loan?"
-        message="This removes the loan and all its recorded repayments. This cannot be undone."
-        confirmLabel="Delete loan"
+        open={!!deletingLoan}
+        title="Delete Loan"
+        message="Are you sure you want to delete this loan? All associated repayments will also be removed."
+        confirmLabel="Delete"
         danger
         onConfirm={() => {
-          if (toDelete) {
-            deleteLoan(toDelete.id);
+          if (deletingLoan) {
+            deleteLoan(deletingLoan.id);
             notify('Loan deleted');
+            setDeletingLoan(null);
           }
         }}
-        onClose={() => setToDelete(null)}
+        onClose={() => setDeletingLoan(null)}
       />
     </div>
-  );
-}
-
-function Chip({ icon, label, tone = 'slate' }: { icon: React.ReactNode; label: string; tone?: 'slate' | 'amber' | 'rose' }) {
-  const tones = {
-    slate: 'bg-slate-100 text-slate-600',
-    amber: 'bg-amber-50 text-amber-700',
-    rose: 'bg-rose-50 text-rose-700',
-  };
-  return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium', tones[tone])}>
-      {icon}
-      {label}
-    </span>
   );
 }
