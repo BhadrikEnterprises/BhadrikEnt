@@ -168,7 +168,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const cleanLoans: Loan[] = (loansRes.data || []).map((l: any) => ({
           id: l.id,
-          clientId: l.cilentid ?? l.clientid ?? l.clientId ?? '',
+          clientId: l.clientid ?? l.clientId ?? '',
           amount: Number(l.amount ?? l.principal ?? 0),
           principal: Number(l.principal ?? l.amount ?? 0),
           interestRate: Number(l.interestRate ?? l.interestrate ?? 0),
@@ -258,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            cilentid: loan.clientId, // matches the database column typo 'cilentid'
+            clientid: loan.clientId, // exact match to Supabase column name
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
@@ -282,7 +282,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const payload = {
             id: loan.id,
-            cilentid: loan.clientId,
+            clientid: loan.clientId,
             amount: Number(loan.amount || loan.principal || 0),
             interestRate: Number(loan.interestRate || 0),
             startDate: loan.startDate || nowISO(),
